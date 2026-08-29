@@ -5,7 +5,7 @@ from datetime import datetime, date, timedelta
 
 # 1. 페이지 레이아웃 및 기본 설정
 st.set_page_config(
-    page_title="LLM 기반 군 인사 & 교육 관리 대시보드",
+    page_title="LLM 기반 부대별 인사 & 의무교육 관제 시스템",
     page_icon="🎖️",
     layout="wide"
 )
@@ -20,7 +20,7 @@ st.markdown("""
     }
     
     .main-header {
-        font-size: 28px !important;
+        font-size: 26px !important;
         font-weight: 900 !important;
         color: #1E3A8A !important;
         padding-bottom: 10px;
@@ -46,14 +46,87 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 3. 메인 타이틀 헤더
-st.markdown('<div class="main-header">🎖️ LLM 기반 군 인사 & 의무교육 통합 관리 시스템</div>', unsafe_allow_html=True)
+# 3. 로그인 및 부대 권한 세션 관리
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
+if "username" not in st.session_state:
+    st.session_state["username"] = ""
 
-# 4. 100명 간부 데이터 통합 생성 (인사 자력 + 의무교육 이수 현황)
+# 부대별 사용자 계정 DB (시연용)
+USER_DB = {
+    "6bde": {
+        "password": "1234", 
+        "name": "김지휘 대위 (6여단 인사실무자)", 
+        "unit": "6여단",
+        "accessible_units": ["6여단 본부", "6여단 101대대", "6여단 102대대", "6여단 103대대", "6여단 포병대대"]
+    },
+    "101bn": {
+        "password": "1234", 
+        "name": "강우진 중사 (101대대 인사담당관)", 
+        "unit": "6여단 101대대",
+        "accessible_units": ["6여단 101대대"]
+    },
+    "HQ": {
+        "password": "1234", 
+        "name": "박군수 소령 (상급부대 인사처장)", 
+        "unit": "군수사령부",
+        "accessible_units": ["ALL"] # 전 부대 접근 가능
+    }
+}
+
+# --- 로그인 화면 UI ---
+if not st.session_state["logged_in"]:
+    st.markdown('<div class="main-header">🔒 부대별 인사 & 의무교육 관제 시스템 - 로그인</div>', unsafe_allow_html=True)
+    
+    col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
+    with col_l2:
+        st.info(
+            "💡 **부대 권한별 테스트 로그인 계정**\n"
+            "- **6여단 인사실무자:** ID `6bde` / PW `1234` (6여단 본부 및 예하 대대 관제)\n"
+            "- **101대대 인사담당관:** ID `101bn` / PW `1234` (101대대 전용 관제)\n"
+            "- **상급부대 지휘관:** ID `HQ` / PW `1234` (전체 부대 총괄)"
+        )
+        
+        with st.form("login_form"):
+            input_user = st.text_input("아이디 (ID)")
+            input_pw = st.text_input("비밀번호 (Password)", type="password")
+            submit_button = st.form_submit_button("로그인", type="primary", use_container_width=True)
+            
+            if submit_button:
+                if input_user in USER_DB and USER_DB[input_user]["password"] == input_pw:
+                    st.session_state["logged_in"] = True
+                    st.session_state["username"] = input_user
+                    st.success("로그인 성공!")
+                    st.rerun()
+                else:
+                    st.error("❌ 아이디 또는 비밀번호가 올바르지 않습니다.")
+    st.stop()
+
+# --- 로그인 후 메인 화면 ---
+
+# 접속자 권한 및 소속 부대 확인
+current_user = USER_DB[st.session_state["username"]]
+
+with st.sidebar:
+    st.write(f"👤 **접속자:** {current_user['name']}")
+    st.write(f"🎖️ **소속:** {current_user['unit']}")
+    if st.button("🚪 로그아웃", type="secondary"):
+        st.session_state["logged_in"] = False
+        st.session_state["username"] = ""
+        st.rerun()
+
+st.markdown(f'<div class="main-header">🎖️ [{current_user["unit"]}] 예하 부대 통합 인사 & 의무교육 대시보드</div>', unsafe_allow_html=True)
+
+# 4. 부대 지정 포함 100명 간부 DB 자동 생성
 @st.cache_data
 def generate_100_personnel():
     random.seed(42)
     today = date(2026, 8, 29)
+    
+    units_pool = [
+        "6여단 본부", "6여단 101대대", "6여단 102대대", "6여단 103대대", "6여단 포병대대",
+        "군수사 직할대", "작전사 본부"  # 상위/타 부대 예시
+    ]
     
     last_names = ["김", "이", "박", "최", "정", "강", "조", "윤", "장", "임", "한", "오", "서", "신", "권", "황", "안", "송", "류", "홍"]
     first_names = ["민준", "서준", "도현", "우진", "지후", "하준", "도윤", "시우", "유진", "소희", "지민", "서연", "하은", "지아", "수아", "예은", "지원", "현우", "건우", "성민"]
@@ -72,7 +145,6 @@ def generate_100_personnel():
     
     avail_pool = ["즉시 가용", "2026-08-30", "2026-09-01", "2026-09-05", "2026-09-10", "임무 수행 중(불가)"]
     ratings = ["S", "A+", "A", "B+", "B"]
-    
     mandatory_courses = ["자살예방교육", "성폭력 예방교육", "보안 및 정보보호교육", "군대윤리교육"]
     
     data = []
@@ -83,7 +155,12 @@ def generate_100_personnel():
         rank = random.choice(ranks)
         branch = random.choice(branches)
         
-        # 인사 자력 데이터
+        # 6여단 예하 부대 위주 배정
+        if i <= 80:
+            assigned_unit = random.choice(units_pool[:5])
+        else:
+            assigned_unit = random.choice(units_pool[5:])
+            
         if i % 10 == 0:
             branch = "수송"
             cert = "특수운전면허, 구난차운전면허"
@@ -111,16 +188,15 @@ def generate_100_personnel():
         avail = random.choice(avail_pool)
         rating = random.choice(ratings)
         
-        # 필수 의무교육 이수 현황 데이터 생성
         course_target = random.choice(mandatory_courses)
-        status = random.choices(["이수완료", "미이수"], weights=[0.7, 0.3])[0]
+        status = random.choices(["이수완료", "미이수"], weights=[0.65, 0.35])[0]
         
-        # 마감일 난수 설정 (과거, 임박, 여유)
-        days_offset = random.choice([-2, 3, 5, 7, 12, 20, 30])
+        days_offset = random.choice([-2, 2, 4, 6, 10, 18, 25])
         due_date = today + timedelta(days=days_offset)
         d_day_val = (due_date - today).days
         
         data.append({
+            "소속부대": assigned_unit,
             "군번": sn,
             "성명": name,
             "계급": rank,
@@ -138,22 +214,27 @@ def generate_100_personnel():
         
     return pd.DataFrame(data)
 
-df = generate_100_personnel()
+raw_df = generate_100_personnel()
 
-# 5. 탭 메뉴 생성 (두 개의 대시보드로 분리)
-tab1, tab2 = st.tabs(["🔍 1. 임무 적합자 추천 대시보드", "🚨 2. 필수 의무교육 이수 관리 대시보드"])
+# --- 권한 기반 부대 데이터 필터링 로직 ---
+if current_user["accessible_units"] == ["ALL"]:
+    df = raw_df.copy()
+else:
+    df = raw_df[raw_df["소속부대"].isin(current_user["accessible_units"])].copy()
+
+# 5. 대시보드 탭 구성을 위한 렌더링
+tab1, tab2 = st.tabs(["🔍 1. 예하 부대 임무 적합자 추천", "🚨 2. 예하 부대 의무교육 관제 대시보드"])
 
 # ==========================================
-# TAB 1: 임무 적합자 추천 대시보드
+# TAB 1: 예하 부대 임무 적합자 추천
 # ==========================================
 with tab1:
-    st.subheader("🔍 임무 요구사항 입력 및 실시간 추출")
-    st.write(f"현재 등록된 **전체 간부 DB ({len(df)}명)**에서 의도에 부합하는 **실제 자격자만** 필터링하여 추천합니다.")
+    st.subheader("🔍 관할 부대 임무 요구사항 분석 및 추천")
+    st.write(f"현재 접속 권한 관할 부대: **{', '.join(current_user['accessible_units'] if current_user['accessible_units'] != ['ALL'] else ['전체 부대'])}** (총 {len(df)}명)")
 
     user_prompt = st.text_input(
         "요구사항 입력창:",
-        value="위험물 수송 및 관리 가능한 인원 추천해줘",
-        placeholder="예: 위험물 관리자, 물류 기획 요원, 안전관리관, 드론 조교, 구난차 운전 등"
+        value="위험물 수송 및 관리 가능한 인원 추천해줘"
     )
 
     top_n = st.slider("최대 추출 인원 수 선택:", min_value=1, max_value=10, value=3)
@@ -162,7 +243,7 @@ with tab1:
         if not user_prompt.strip():
             st.warning("⚠️ 요구사항을 입력해 주세요.")
         else:
-            with st.spinner("AI가 입력 조건과 일치하는 핵심 자격 보유자만 검증 중입니다..."):
+            with st.spinner("AI가 예하 부대 대상 인원 자력을 검증 중입니다..."):
                 prompt_lower = user_prompt.lower()
                 
                 is_hazmat = any(w in prompt_lower for w in ["위험물", "유류", "탄약", "화약"])
@@ -254,12 +335,12 @@ with tab1:
                         })
                 
                 if not matched_results:
-                    st.error("⚠️ **검색 조건에 부합하는 해당 자격자가 DB 내에 존재하지 않습니다.**")
+                    st.error("⚠️ **관할 부대 내에 해당되는 자격자가 없습니다.**")
                 else:
                     matched_results = sorted(matched_results, key=lambda x: x["score"], reverse=True)
                     final_list = matched_results[:top_n]
                     
-                    st.success(f"🎯 **요구조건(핵심 자격)을 충족하는 적합자 총 {len(matched_results)}명 중 상위 {len(final_list)}명을 추천합니다.**")
+                    st.success(f"🎯 **관할 부대 인원 중 적합자 총 {len(matched_results)}명 중 상위 {len(final_list)}명을 추천합니다.**")
                     
                     for rank, item in enumerate(final_list, 1):
                         person = item["info"]
@@ -268,55 +349,62 @@ with tab1:
                         
                         st.markdown(f"""
                             <div class="card-box">
-                                <h4 style="margin:0; color:#1E3A8A;">🏅 {rank}순위: {person['성명']} {person['계급']} (추출 적합도 점수: {score}점)</h4>
+                                <h4 style="margin:0; color:#1E3A8A;">🏅 {rank}순위: [{person['소속부대']}] {person['성명']} {person['계급']} ({score}점)</h4>
                                 <p style="margin:5px 0 0 0;">
-                                • <b>군번 / 병과 / 경력:</b> {person['군번']} / {person['병과']} / {person['관련경력']}<br>
+                                • <b>소속 / 군번 / 병과:</b> <span style="font-weight:bold; color:#1E3A8A;">{person['소속부대']}</span> / {person['군번']} / {person['병과']}<br>
                                 • <b>보유 자격:</b> <span style="color:#1D4ED8; font-weight:bold;">{person['보유자격증']}</span><br>
                                 • <b>교육 현황:</b> {person['교육이수현황']}<br>
                                 • <b>투입 가용일:</b> <span style="color:#DC2626; font-weight:bold;">{person['투입가용일']}</span> (최종평정: {person['최종평정']})<br>
-                                • <b>AI 충족 자격 및 추천 사유:</b> <span style="color:#1D4ED8; font-weight:bold;">{reasons_str}</span>
+                                • <b>AI 추천 사유:</b> <span style="color:#1D4ED8; font-weight:bold;">{reasons_str}</span>
                                 </p>
                             </div>
                         """, unsafe_allow_html=True)
 
     st.divider()
-    st.subheader("📋 전체 간부 인사자력 DB 현황 (총 100명)")
-    st.dataframe(df[["군번", "성명", "계급", "병과", "보유자격증", "교육이수현황", "관련경력", "투입가용일", "최종평정"]], use_container_width=True, hide_index=True)
+    st.subheader("📋 관할 부대 간부 인사자력 현황")
+    st.dataframe(df[["소속부대", "군번", "성명", "계급", "병과", "보유자격증", "교육이수현황", "관련경력", "투입가용일", "최종평정"]], use_container_width=True, hide_index=True)
 
 
 # ==========================================
-# TAB 2: 필수 의무교육 이수 관리 대시보드
+# TAB 2: 예하 부대 의무교육 관제 대시보드
 # ==========================================
 with tab2:
-    st.subheader("📢 필수 의무교육 이수 현황 및 마감 임박자 모니터링")
-    st.write("전 간부의 자살예방교육, 성폭력 예방교육 등 **필수 의무교육 이수 여부 및 D-Day 현황**을 관제합니다.")
+    st.subheader("📢 관할 예하 부대별 필수 의무교육 미이수 관제")
+    st.write(f"접속 권한: **[{current_user['unit']}]** 관할 예하 부대원들의 의무교육 마감일 및 미이수 현황입니다.")
     
-    # 1. 의무교육 요약 메트릭 카드
-    uncompleted_df = df[df["이수상태"] == "미이수"]
+    # 1. 예하 부대 선택 세부 필터 (여단 실무자일 경우 예하 대대별 선택 가능)
+    available_unit_options = ["관할 부대 전체"] + list(df["소속부대"].unique())
+    selected_sub_unit = st.selectbox("📌 조회할 예하 부대 선택:", available_unit_options)
+    
+    if selected_sub_unit != "관할 부대 전체":
+        edu_view_df = df[df["소속부대"] == selected_sub_unit].copy()
+    else:
+        edu_view_df = df.copy()
+
+    # 지표 계산
+    uncompleted_df = edu_view_df[edu_view_df["이수상태"] == "미이수"]
     urgent_uncompleted = uncompleted_df[uncompleted_df["D_Day"] <= 7]
-    completed_count = len(df[df["이수상태"] == "이수완료"])
-    completion_rate = round((completed_count / len(df)) * 100, 1)
+    completed_count = len(edu_view_df[edu_view_df["이수상태"] == "이수완료"])
+    completion_rate = round((completed_count / len(edu_view_df)) * 100, 1) if len(edu_view_df) > 0 else 0
     
     col_e1, col_e2, col_e3, col_e4 = st.columns(4)
     with col_e1:
-        st.metric(label="👥 전체 대상 인원", value=f"{len(df)}명")
+        st.metric(label="👥 관할 대상 인원", value=f"{len(edu_view_df)}명")
     with col_e2:
         st.metric(label="✅ 평균 교육 이수율", value=f"{completion_rate}%")
     with col_e3:
         st.metric(label="❌ 미이수 인원 수", value=f"{len(uncompleted_df)}명", delta=f"-{len(uncompleted_df)}명", delta_color="inverse")
     with col_e4:
-        st.metric(label="🚨 마감 임박(D-7 이내) 미이수자", value=f"{len(urgent_uncompleted)}명", delta="긴급독려 필요", delta_color="inverse")
+        st.metric(label="🚨 마감 임박(D-7 이내) 미이수자", value=f"{len(urgent_uncompleted)}명", delta="긴급 독려 필요", delta_color="inverse")
         
     st.divider()
     
-    # 2. 마감 임박 / 초과 미이수자 경고 구역
-    st.subheader("🚨 마감 임박 / 초과 미이수자 (긴급 독려 대상)")
-    st.write("마감일이 **7일 이내로 남았거나 이미 경과했으나 미이수한 인원 목록**입니다.")
+    # 2. 마감 임박 미이수자 경고 (부대명 표시)
+    st.subheader("🚨 마감 임박 / 초과 미이수자 (부대별 독려 대상)")
     
     if len(urgent_uncompleted) == 0:
-        st.success("🎉 현재 마감 임박(D-7 이내) 미이수자가 없습니다.")
+        st.success("🎉 관할 선택 부대에 마감 임박(D-7 이내) 미이수자가 없습니다.")
     else:
-        # D-Day 기준 오름차순 정렬 (마감일 가장 빠른순)
         urgent_sorted = urgent_uncompleted.sort_values(by="D_Day")
         
         for idx, row in urgent_sorted.iterrows():
@@ -324,19 +412,19 @@ with tab2:
             
             st.markdown(f"""
                 <div class="warning-box">
-                    <h4 style="margin:0; color:#DC2626;">⚠️ [미이수 경고] {row['성명']} {row['계급']} ({row['군번']} / {row['병과']})</h4>
+                    <h4 style="margin:0; color:#DC2626;">⚠️ [미이수 경고] [{row['소속부대']}] {row['성명']} {row['계급']} ({row['군번']})</h4>
                     <p style="margin:5px 0 0 0;">
                     • <b>미이수 과목:</b> <span style="font-weight:bold; color:#1E3A8A;">{row['필수의무교육']}</span><br>
                     • <b>교육 마감일:</b> {row['교육마감일']} (<span style="color:#DC2626; font-weight:bold;">{d_day_str}</span>)<br>
-                    • <b>조치 사항:</b> 교육이수 독려 알림 발송 대상
+                    • <b>조치 권고사항:</b> 해당 대대({row['소속부대']}) 인사담당관에게 교육이수 독려 지시 발송
                     </p>
                 </div>
             """, unsafe_allow_html=True)
 
     st.divider()
     
-    # 3. 의무교육 전체 현황 검색 및 필터링 표
-    st.subheader("📋 전체 의무교육 이수 현황 검색 및 관제")
+    # 3. 부대별 검색 표
+    st.subheader("📋 관할 부대 의무교육 상세 현황")
     
     col_f1, col_f2 = st.columns(2)
     with col_f1:
@@ -344,8 +432,7 @@ with tab2:
     with col_f2:
         selected_status = st.selectbox("이수 상태 선택:", ["전체 상태", "미이수자만 보기", "이수완료자만 보기"])
         
-    # 필터링 로직
-    filtered_edu_df = df.copy()
+    filtered_edu_df = edu_view_df.copy()
     
     if selected_course != "전체 과목":
         filtered_edu_df = filtered_edu_df[filtered_edu_df["필수의무교육"] == selected_course]
@@ -355,8 +442,7 @@ with tab2:
     elif selected_status == "이수완료자만 보기":
         filtered_edu_df = filtered_edu_df[filtered_edu_df["이수상태"] == "이수완료"]
         
-    # 데이터표 정렬 및 보기 좋게 가공
-    display_edu_df = filtered_edu_df[["군번", "성명", "계급", "병과", "필수의무교육", "이수상태", "교육마감일", "D_Day"]].copy()
+    display_edu_df = filtered_edu_df[["소속부대", "군번", "성명", "계급", "병과", "필수의무교육", "이수상태", "교육마감일", "D_Day"]].copy()
     display_edu_df = display_edu_df.sort_values(by=["이수상태", "D_Day"], ascending=[True, True])
     
     st.dataframe(display_edu_df, use_container_width=True, hide_index=True)
