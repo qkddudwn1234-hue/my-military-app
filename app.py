@@ -6,50 +6,14 @@ import re
 from datetime import datetime, date, timedelta
 import google.generativeai as genai
 
-# 1. 페이지 레이아웃 및 기본 설정
+# 1. 페이지 레이아웃 설정
 st.set_page_config(
     page_title="LLM 기반 부대별 인사 & 의무교육 관제 시스템",
     page_icon="🎖️",
     layout="wide"
 )
 
-# 2. 커스텀 CSS 디자인
-st.markdown("""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');
-    
-    html, body, [class*="css"] {
-        font-family: 'Noto Sans KR', sans-serif !important;
-    }
-    
-    .main-header {
-        font-size: 26px !important;
-        font-weight: 900 !important;
-        color: #1E3A8A !important;
-        padding-bottom: 10px;
-        border-bottom: 3px solid #1E3A8A;
-        margin-bottom: 20px;
-    }
-    
-    .card-box {
-        background-color: #F8FAFC;
-        border-left: 5px solid #1E3A8A;
-        padding: 15px;
-        border-radius: 8px;
-        margin-bottom: 15px;
-    }
-
-    .warning-box {
-        background-color: #FEF2F2;
-        border-left: 5px solid #DC2626;
-        padding: 15px;
-        border-radius: 8px;
-        margin-bottom: 15px;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
-# 3. 세션 초기화
+# 2. 세션 초기화
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 if "username" not in st.session_state:
@@ -81,15 +45,15 @@ USER_DB = {
 
 # --- 로그인 화면 UI ---
 if not st.session_state["logged_in"]:
-    st.markdown('<div class="main-header">🔒 부대별 인사 & 의무교육 관제 시스템 - 로그인</div>', unsafe_allow_html=True)
+    st.title("🔒 부대별 인사 & 의무교육 관제 시스템 - 로그인")
     
     col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
     with col_l2:
         st.info(
             "💡 **부대 권한별 테스트 로그인 계정**\n"
-            "- **6여단 인사실무자:** ID `6bde` / PW `1234` (6여단 본부 및 예하 대대/중대 관제)\n"
-            "- **101대대 인사담당관:** ID `101bn` / PW `1234` (101대대 본부 및 중대 전용 관제)\n"
-            "- **상급부대 지휘관:** ID `HQ` / PW `1234` (전체 부대 총괄)"
+            "- **6여단 인사실무자:** ID `6bde` / PW `1234`\n"
+            "- **101대대 인사담당관:** ID `101bn` / PW `1234`\n"
+            "- **상급부대 지휘관:** ID `HQ` / PW `1234`"
         )
         
         with st.form("login_form"):
@@ -107,10 +71,9 @@ if not st.session_state["logged_in"]:
                     st.error("❌ 아이디 또는 비밀번호가 올바르지 않습니다.")
     st.stop()
 
-# --- 로그인 완료 후 화면 ---
+# --- 로그인 완료 후 메인 화면 ---
 current_user = USER_DB[st.session_state["username"]]
 
-# Streamlit Secrets 자동 연결
 gemini_api_key = ""
 if "GEMINI_API_KEY" in st.secrets:
     gemini_api_key = st.secrets["GEMINI_API_KEY"]
@@ -120,15 +83,15 @@ if "GEMINI_API_KEY" in st.secrets:
         pass
 
 with st.sidebar:
-    st.write("👤 **접속자:** {}".format(current_user['name']))
-    st.write("🎖️ **소속:** {}".format(current_user['unit']))
+    st.write("👤 **접속자:**", current_user['name'])
+    st.write("🎖️ **소속:**", current_user['unit'])
     st.divider()
     
     st.subheader("🔑 Gemini LLM 연동 상태")
     if gemini_api_key:
         st.caption("🟢 Gemini 3.6 Flash AI 연동 완료")
     else:
-        st.caption("🔴 Secrets 설정 필요 (Streamlit Cloud Settings 확인)")
+        st.caption("🔴 Secrets 설정 필요")
             
     st.divider()
     if st.button("🚪 로그아웃", type="secondary"):
@@ -136,10 +99,9 @@ with st.sidebar:
         st.session_state["username"] = ""
         st.rerun()
 
-header_title = '<div class="main-header">🤖 [{}] Gemini LLM 인사 & 의무교육 통합 관제</div>'.format(current_user["unit"])
-st.markdown(header_title, unsafe_allow_html=True)
+st.title("🤖 [{}] Gemini LLM 인사 & 의무교육 관제".format(current_user["unit"]))
 
-# 4. 고속 데이터베이스 생성 (300명)
+# 3. 데이터베이스 생성 (300명)
 @st.cache_data
 def generate_personnel_db():
     random.seed(42)
@@ -241,7 +203,7 @@ if current_user["accessible_units"] == ["ALL"]:
 else:
     df = raw_df[raw_df["소속부대"].isin(current_user["accessible_units"])].copy()
 
-# 5. 탭 구성
+# 4. 탭 구성
 tab1, tab2 = st.tabs(["🤖 1. Gemini LLM 기반 적합자 분석", "🚨 2. 예하 부대 의무교육 관제 대시보드"])
 
 # ==========================================
@@ -265,7 +227,6 @@ with tab1:
             with st.spinner("🤖 Gemini AI가 DB를 스캔하여 적합자를 심사 중입니다..."):
                 if gemini_api_key:
                     try:
-                        # 1차 초고속 키워드 스캔
                         prompt_lower = user_prompt.lower()
                         keywords = [w for w in ["구난", "운전", "드론", "통신", "위험물", "안전", "물류", "보급", "비행", "특수"] if w in prompt_lower]
                         
@@ -284,25 +245,23 @@ with tab1:
                         target_df = filtered_candidates.head(15)
                         db_json = target_df[["소속부대", "성명", "계급", "병과", "보유자격증", "교육이수현황", "관련경력", "투입가용일", "최종평정"]].to_json(orient="records", force_ascii=False)
                         
-                        prompt_text = """
-                        너는 대한민국 육군 인사참모 AI 보조관이다.
-                        주어진 [부대 간부 1차 후보 DB]를 종합 분석해서 사용자의 [요구사항]에 가장 완벽히 부합하는 간부를 상위 {top_n_val}명 선발해라.
-                        자격증, 가용일, 병과, 경력, 평정 등을 종합 판단하여 자연스러운 군 인사 참모 문체로 추천 사유를 작성해라.
-
-                        [요구사항]: {user_req}
-                        [부대 간부 1차 후보 DB]: {db_data}
-
-                        반드시 아래 JSON 배열 형식으로만 응답해라. 다른 설명 텍스트나 코드블록 표시는 생략해라.
-                        [
-                          {{
-                            "성명": "이름",
-                            "계급": "계급",
-                            "소속부대": "부대명",
-                            "적합도점수": 95,
-                            "추천사유": "상세 추천 사유"
-                          }}
-                        ]
-                        """.format(top_n_val=top_n, user_req=user_prompt, db_data=db_json)
+                        prompt_text = (
+                            "너는 대한민국 육군 인사참모 AI 보조관이다.\n"
+                            "주어진 [부대 간부 1차 후보 DB]를 종합 분석해서 사용자의 [요구사항]에 가장 완벽히 부합하는 간부를 상위 " + str(top_n) + "명 선발해라.\n"
+                            "자격증, 가용일, 병과, 경력, 평정 등을 종합 판단하여 추천 사유를 작성해라.\n\n"
+                            "[요구사항]: " + user_prompt + "\n"
+                            "[부대 간부 1차 후보 DB]: " + db_json + "\n\n"
+                            "반드시 아래 JSON 배열 형식으로만 응답해라. 다른 설명이나 코드블록 표시는 생략해라.\n"
+                            "[\n"
+                            "  {\n"
+                            '    "성명": "이름",\n'
+                            '    "계급": "계급",\n'
+                            '    "소속부대": "부대명",\n'
+                            '    "적합도점수": 95,\n'
+                            '    "추천사유": "상세 추천 사유"\n'
+                            "  }\n"
+                            "]"
+                        )
                         
                         model = genai.GenerativeModel('gemini-3.6-flash')
                         response = model.generate_content(prompt_text)
@@ -310,9 +269,46 @@ with tab1:
                         clean_text = re.sub(r'```(?:json)?', '', response.text).strip()
                         results = json.loads(clean_text)
                         
-                        st.success("🎯 **Google Gemini AI가 최적격자 {}명을 도출했습니다.**".format(len(results)))
+                        st.success("🎯 Google Gemini AI가 최적격자 {}명을 도출했습니다.".format(len(results)))
                         
                         for rank, item in enumerate(results, 1):
-                            card_html = (
-                                '<div class="card-box">'
-                                '<h4 style="margin:0; color:#1E3A8A;">🏅 {
+                            with st.expander("🏅 {}순위 추천: [{}] {} {} (적합도: {}점)".format(rank, item["소속부대"], item["성명"], item["계급"], item["적합도점수"]), expanded=True):
+                                st.write("🤖 **Gemini 참모 AI 판단 사유:**")
+                                st.info(item["추천사유"])
+                            
+                    except Exception as e:
+                        st.error("❌ Gemini API 연동 오류 발생: {}".format(e))
+                else:
+                    st.error("⚠️ Streamlit Secrets에 GEMINI_API_KEY가 설정되어 있지 않습니다.")
+
+    st.divider()
+    st.subheader("📋 관할 부대 간부 인사자력 현황 (총 {}명)".format(len(df)))
+    st.dataframe(df[["소속부대", "군번", "성명", "계급", "병과", "보유자격증", "교육이수현황", "관련경력", "투입가용일", "최종평정"]], use_container_width=True, hide_index=True)
+
+
+# ==========================================
+# TAB 2: 예하 부대 의무교육 관제 대시보드
+# ==========================================
+with tab2:
+    st.subheader("📢 관할 예하 부대별 필수 의무교육 미이수 관제")
+    st.write("접속 권한: **[{}]** 관할 예하 부대원 현황입니다.".format(current_user['unit']))
+    
+    available_unit_options = ["관할 부대 전체"] + list(df["소속부대"].unique())
+    selected_sub_unit = st.selectbox("📌 조회할 예하 부대/중대 선택:", available_unit_options)
+    
+    if selected_sub_unit != "관할 부대 전체":
+        edu_view_df = df[df["소속부대"] == selected_sub_unit].copy()
+    else:
+        edu_view_df = df.copy()
+
+    uncompleted_df = edu_view_df[edu_view_df["이수상태"] == "미이수"]
+    urgent_uncompleted = uncompleted_df[uncompleted_df["D_Day"] <= 7]
+    completed_count = len(edu_view_df[edu_view_df["이수상태"] == "이수완료"])
+    completion_rate = round((completed_count / len(edu_view_df)) * 100, 1) if len(edu_view_df) > 0 else 0
+    
+    col_e1, col_e2, col_e3, col_e4 = st.columns(4)
+    with col_e1:
+        st.metric(label="👥 관할 대상 인원", value="{}명".format(len(edu_view_df)))
+    with col_e2:
+        st.metric(label="✅ 평균 교육 이수율", value="{}%".format(completion_rate))
+    with col_e3:
