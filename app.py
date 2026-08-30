@@ -6,31 +6,70 @@ import google.generativeai as genai
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(page_title="육군 인사 및 의무교육 관제", layout="wide")
+st.set_page_config(page_title="군 인사 & 의무교육 통합 관제 시스템", layout="wide")
 
-st.markdown("""
-<style>
-    .main-title {
-        font-size: 24px !important;
-        font-weight: bold;
-        color: #1E3A8A;
-        border-bottom: 2px solid #1E3A8A;
-        padding-bottom: 8px;
-        margin-bottom: 15px;
-    }
-</style>
-""", unsafe_allow_html=True)
-
+# 1. 세션 상태 초기화 (로그인 및 디자인 커스텀 옵션)
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 if "username" not in st.session_state:
     st.session_state["username"] = ""
 
+# 관리자 커스텀 디자인 세션 상태
+if "custom_theme" not in st.session_state:
+    st.session_state["custom_theme"] = "밀리터리 네이비"
+if "primary_color" not in st.session_state:
+    st.session_state["primary_color"] = "#1E3A8A"
+if "unit_icon" not in st.session_state:
+    st.session_state["unit_icon"] = "🛡️"
+if "custom_title" not in st.session_state:
+    st.session_state["custom_title"] = "Gemini LLM 인사 자력 & 의무교육 통합 관제 대시보드"
+
+# 테마별 배경/카드 색상 매핑
+THEME_STYLES = {
+    "밀리터리 네이비": {"bg": "#F8FAFC", "card": "#FFFFFF", "text": "#0F172A", "border": "#1E3A8A"},
+    "스텔스 다크/블랙": {"bg": "#0F172A", "card": "#1E293B", "text": "#F8FAFC", "border": "#3B82F6"},
+    "모던 메탈 그레이": {"bg": "#E2E8F0", "card": "#FFFFFF", "text": "#1E293B", "border": "#475569"}
+}
+
+current_theme = THEME_STYLES[st.session_state["custom_theme"]]
+
+# 동적 CSS 적용
+st.markdown(
+    '<style>'
+    'body { background-color: ' + current_theme["bg"] + '; color: ' + current_theme["text"] + '; }'
+    '.main-title {'
+    '    font-size: 24px !important;'
+    '    font-weight: 900 !important;'
+    '    color: ' + st.session_state["primary_color"] + ';'
+    '    border-bottom: 3px solid ' + st.session_state["primary_color"] + ';'
+    '    padding-bottom: 10px;'
+    '    margin-bottom: 20px;'
+    '}'
+    '.user-card {'
+    '    background-color: ' + current_theme["card"] + ';'
+    '    border-left: 5px solid ' + st.session_state["primary_color"] + ';'
+    '    padding: 12px;'
+    '    border-radius: 8px;'
+    '    margin-bottom: 15px;'
+    '}'
+    '</style>',
+    unsafe_allow_html=True
+)
+
+# 계정 DB (관리자 admin 추가)
 USER_DB = {
+    "admin": {
+        "password": "1234",
+        "name": "최고관리자 (전체 시스템 관리)",
+        "unit": "국방부/합참",
+        "role": "ADMIN",
+        "accessible_units": ["ALL"]
+    },
     "6bde": {
         "password": "1234",
         "name": "김지휘 대위 (6여단)",
         "unit": "6여단",
+        "role": "USER",
         "accessible_units": [
             "6여단 본부", "6여단 101대대 본부", "6여단 101대대 1중대", 
             "6여단 101대대 2중대", "6여단 102대대", "6여단 103대대", 
@@ -41,6 +80,7 @@ USER_DB = {
         "password": "1234",
         "name": "강우진 중사 (101대대)",
         "unit": "6여단 101대대",
+        "role": "USER",
         "accessible_units": [
             "6여단 101대대 본부", "6여단 101대대 1중대", "6여단 101대대 2중대"
         ]
@@ -49,27 +89,31 @@ USER_DB = {
         "password": "1234",
         "name": "박군수 소령 (상급부대)",
         "unit": "군수사령부",
+        "role": "USER",
         "accessible_units": ["ALL"]
     }
 }
 
+# --- 로그인 화면 ---
 if not st.session_state["logged_in"]:
-    st.markdown('<div class="main-title">🛡️ 육군 관제 시스템 - 로그인</div>', unsafe_allow_html=True)
-    st.info("💡 계정: 6bde / 101bn / HQ (비밀번호: 1234)")
+    st.markdown('<div class="main-title">🛡️ 대한민국 육군 통합 관제 시스템 - 로그인</div>', unsafe_allow_html=True)
+    st.info("💡 **로그인 계정 정보**\n- **최고 관리자:** ID `admin` / PW `1234` (디자인 변경 및 전체 관제)\n- **6여단 담당자:** ID `6bde` / PW `1234` | **101대대 담당자:** ID `101bn` / PW `1234` | **상급부대:** ID `HQ` / PW `1234`")
+    
     with st.form("login_form"):
-        u = st.text_input("아이디")
-        p = st.text_input("비밀번호", type="password")
+        u = st.text_input("아이디 (ID)")
+        p = st.text_input("비밀번호 (PW)", type="password")
         if st.form_submit_button("로그인", type="primary", use_container_width=True):
             if u in USER_DB and USER_DB[u]["password"] == p:
                 st.session_state["logged_in"] = True
                 st.session_state["username"] = u
                 st.rerun()
             else:
-                st.error("❌ 비밀번호 오류")
+                st.error("❌ 아이디 또는 비밀번호가 올바르지 않습니다.")
     st.stop()
 
 current_user = USER_DB[st.session_state["username"]]
 
+# Gemini API 설정
 gemini_api_key = ""
 if "GEMINI_API_KEY" in st.secrets:
     gemini_api_key = st.secrets["GEMINI_API_KEY"]
@@ -78,24 +122,65 @@ if "GEMINI_API_KEY" in st.secrets:
     except Exception:
         pass
 
+# --- 사이드바 및 관리자 디자인 컨트롤러 ---
 with st.sidebar:
-    st.markdown("### 🎖️ 접속 프로필")
+    st.markdown("### " + st.session_state["unit_icon"] + " 접속 프로필")
     st.write("성명:", current_user["name"])
     st.write("소속:", current_user["unit"])
     st.divider()
+    
     st.markdown("### 🔑 AI 참모 연동")
     if gemini_api_key:
-        st.success("🟢 Gemini AI 연동 완료")
+        st.success("🟢 Gemini 3.6 Flash 연동 완료")
     else:
         st.warning("🔴 API Key 설정 필요")
     st.divider()
+
+    # 최고 관리자(ADMIN) 전용 디자인 테마 설정 메뉴
+    if current_user.get("role") == "ADMIN":
+        st.markdown("### 🎨 관리자 디자인 커스텀")
+        
+        theme_sel = st.selectbox(
+            "대시보드 테마 스타일:",
+            ["밀리터리 네이비", "스텔스 다크/블랙", "모던 메탈 그레이"],
+            index=["밀리터리 네이비", "스텔스 다크/블랙", "모던 메탈 그레이"].index(st.session_state["custom_theme"])
+        )
+        
+        color_sel = st.selectbox(
+            "포인트 테마 색상:",
+            ["#1E3A8A", "#15803D", "#B91C1C", "#334155"],
+            format_func=lambda x: {"#1E3A8A": "네이비 Blue", "#15803D": "카키 Green", "#B91C1C": "크림슨 Red", "#334155": "다크 Gray"}[x],
+            index=["#1E3A8A", "#15803D", "#B91C1C", "#334155"].index(st.session_state["primary_color"])
+        )
+        
+        icon_sel = st.selectbox(
+            "부대 상단 아이콘:",
+            ["🛡️", "🎖️", "⚔️", "🦅"],
+            index=["🛡️", "🎖️", "⚔️", "🦅"].index(st.session_state["unit_icon"])
+        )
+        
+        title_sel = st.text_input("메인 타이틀 문구:", value=st.session_state["custom_title"])
+        
+        if st.button("🎨 디자인 설정 저장 및 적용", type="primary", use_container_width=True):
+            st.session_state["custom_theme"] = theme_sel
+            st.session_state["primary_color"] = color_sel
+            st.session_state["unit_icon"] = icon_sel
+            st.session_state["custom_title"] = title_sel
+            st.success("디자인 설정이 적용되었습니다.")
+            st.rerun()
+            
+        st.divider()
+
     if st.button("🚪 로그아웃", type="secondary", use_container_width=True):
         st.session_state["logged_in"] = False
         st.session_state["username"] = ""
         st.rerun()
 
-st.markdown('<div class="main-title">🛡️ [' + str(current_user["unit"]) + '] Gemini LLM 관제 대시보드</div>', unsafe_allow_html=True)
+# 상단 메인 타이틀
+header_text = st.session_state["unit_icon"] + " [" + str(current_user["unit"]) + "] " + st.session_state["custom_title"]
+st.markdown('<div class="main-title">' + header_text + '</div>', unsafe_allow_html=True)
 
+# --- DB 생성 함수 ---
 @st.cache_data
 def generate_personnel_db():
     random.seed(42)
@@ -169,14 +254,16 @@ if current_user["accessible_units"] == ["ALL"]:
 else:
     df = raw_df[raw_df["소속부대"].isin(current_user["accessible_units"])].copy()
 
-tab1, tab2 = st.tabs(["🤖 1. 적합자 분석", "🚨 2. 의무교육 관제"])
+# 메인 탭 구성
+tab1, tab2 = st.tabs(["🤖 1. Gemini AI 적합자 분석", "🚨 2. 예하부대 의무교육 관제"])
 
+# TAB 1: Gemini AI 인사 추론
 with tab1:
-    st.subheader("🤖 Gemini AI 인사 추론")
-    st.write("📊 관할 부대 인원: **총", len(df), "명**")
+    st.subheader("🤖 Gemini 참모 AI 적합자 선발 분석")
+    st.write("📊 관할 부대 관리 인원: **총", len(df), "명**")
 
     user_prompt = st.text_input(
-        "💡 임무 요구사항:",
+        "💡 임무 요구사항 (자연어로 입력):",
         value="내일 바로 구난차 끌고 출동할 수 있는 숙련된 간부 찾아줘"
     )
     top_n = st.slider("🎯 추출 인원 수:", min_value=1, max_value=5, value=3)
@@ -185,7 +272,7 @@ with tab1:
         if not user_prompt.strip():
             st.warning("요구사항을 입력하세요.")
         else:
-            with st.spinner("🤖 심사 진행 중..."):
+            with st.spinner("🤖 Gemini 참모 AI 심사 중..."):
                 if gemini_api_key:
                     try:
                         kw = [w for w in ["구난", "운전", "드론", "통신", "위험물", "보급"] if w in user_prompt.lower()]
@@ -211,7 +298,7 @@ with tab1:
                         for r, it in enumerate(items, 1):
                             t = "🏅 " + str(r) + "순위: [" + str(it['소속부대']) + "] " + str(it['성명']) + " " + str(it['계급']) + " (" + str(it['적합도점수']) + "점)"
                             with st.expander(t, expanded=True):
-                                st.write("🤖 **판단 사유:**")
+                                st.write("🤖 **Gemini 참모 AI 판단 사유:**")
                                 st.info(it["추천사유"])
                     except Exception as e:
                         st.error("연동 오류: " + str(e))
@@ -223,6 +310,7 @@ with tab1:
     d_cols = ["소속부대", "군번", "성명", "계급", "병과", "보유자격증", "교육이수현황", "관련경력", "투입가용일", "최종평정"]
     st.dataframe(df[d_cols], use_container_width=True, hide_index=True)
 
+# TAB 2: 의무교육 관제
 with tab2:
     st.subheader("📢 필수 의무교육 이수 관제")
     st.write("접속 권한: **[" + str(current_user["unit"]) + "]**")
