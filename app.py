@@ -4,8 +4,12 @@ import re
 from datetime import date, timedelta
 import google.generativeai as genai
 import pandas as pd
-import plotly.express as px
 import streamlit as st
+import matplotlib.pyplot as plt
+
+# 한글 폰트 설정 (기본 폰트 패치)
+plt.rcParams['font.family'] = 'DejaVu Sans'
+plt.rcParams['axes.unicode_minus'] = False
 
 st.set_page_config(page_title="육군 인사 및 의무교육 관제 시스템", layout="wide")
 
@@ -15,11 +19,17 @@ if "logged_in" not in st.session_state:
 if "username" not in st.session_state:
     st.session_state["username"] = ""
 
-# 관리자 커스텀 세션 상태
-if "primary_color" not in st.session_state:
-    st.session_state["primary_color"] = "#1E3A8A"
+# 관리자 커스텀 세션 상태 (컬러 및 차트 형태)
+if "title_color" not in st.session_state:
+    st.session_state["title_color"] = "#1E3A8A"
+if "header_color" not in st.session_state:
+    st.session_state["header_color"] = "#0F172A"
+if "accent_color" not in st.session_state:
+    st.session_state["accent_color"] = "#2563EB"
 if "bg_color" not in st.session_state:
     st.session_state["bg_color"] = "#F8FAFC"
+if "chart_type" not in st.session_state:
+    st.session_state["chart_type"] = "원형 차트 (Pie)"
 if "unit_icon" not in st.session_state:
     st.session_state["unit_icon"] = "🛡️"
 if "title_align" not in st.session_state:
@@ -27,25 +37,25 @@ if "title_align" not in st.session_state:
 if "custom_title" not in st.session_state:
     st.session_state["custom_title"] = "LLM 인사 자력 & 의무교육 통합 관제 대시보드"
 
-# CSS 동적 스타일 적용
+# Dynamic CSS
 st.markdown(
     '<style>'
     'body, .stApp { background-color: ' + st.session_state["bg_color"] + ' !important; }'
     '.main-title {'
     '    font-size: 26px !important;'
     '    font-weight: 900 !important;'
-    '    color: ' + st.session_state["primary_color"] + ';'
+    '    color: ' + st.session_state["title_color"] + ';'
     '    text-align: ' + st.session_state["title_align"] + ';'
-    '    border-bottom: 3px solid ' + st.session_state["primary_color"] + ';'
+    '    border-bottom: 3px solid ' + st.session_state["title_color"] + ';'
     '    padding-bottom: 10px;'
     '    margin-bottom: 20px;'
     '}'
-    '.metric-card {'
-    '    background-color: #FFFFFF;'
-    '    border-top: 4px solid ' + st.session_state["primary_color"] + ';'
-    '    padding: 15px;'
-    '    border-radius: 8px;'
-    '    box-shadow: 0 2px 4px rgba(0,0,0,0.05);'
+    'h2, h3, h4 {'
+    '    color: ' + st.session_state["header_color"] + ' !important;'
+    '}'
+    '.accent-text {'
+    '    color: ' + st.session_state["accent_color"] + ' !important;'
+    '    font-weight: bold;'
     '}'
     '</style>',
     unsafe_allow_html=True
@@ -89,7 +99,7 @@ USER_DB = {
     }
 }
 
-# 로그인 UI (admin 비노출)
+# 로그인 UI (admin 화면 노출 안 됨)
 if not st.session_state["logged_in"]:
     st.markdown('<div class="main-title">🛡️ 대한민국 육군 통합 관제 시스템</div>', unsafe_allow_html=True)
     st.info("💡 **부대별 계정 정보:** 6여단 (`6bde`) | 101대대 (`101bn`) | 상급부대 (`HQ`) - 비밀번호: `1234`")
@@ -116,7 +126,7 @@ if "GEMINI_API_KEY" in st.secrets:
     except Exception:
         pass
 
-# 사이드바
+# 사이드바 설정
 with st.sidebar:
     st.markdown("### " + st.session_state["unit_icon"] + " 접속 프로필")
     st.write("성명:", current_user["name"])
@@ -130,27 +140,31 @@ with st.sidebar:
         st.warning("🔴 API Key 설정 필요")
     st.divider()
 
-    # 관리자 비밀 테마 커스텀 메뉴
+    # 관리자 비밀 디자인 & 차트 컨트롤러
     if current_user.get("role") == "ADMIN":
-        st.markdown("### 🎨 Admin 시스템 커스텀")
+        st.markdown("### 🎨 Admin 디자인 & 차트 커스텀")
         
-        c_color = st.selectbox(
-            "포인트 색상:",
-            ["#1E3A8A", "#15803D", "#991B1B", "#334155"],
-            format_func=lambda x: {"#1E3A8A": "네이비 Blue", "#15803D": "카키 Green", "#991B1B": "크림슨 Red", "#334155": "다크 Gray"}[x]
+        c_title_color = st.color_picker("메인 타이틀 텍스트 색상", st.session_state["title_color"])
+        c_header_color = st.color_picker("서브 헤더 텍스트 색상", st.session_state["header_color"])
+        c_accent_color = st.color_picker("강조 텍스트 색상", st.session_state["accent_color"])
+        c_bg = st.color_picker("대시보드 배경 색상", st.session_state["bg_color"])
+        
+        c_chart = st.selectbox(
+            "시각화 차트 형태 선택:",
+            ["원형 차트 (Pie)", "막대 차트 (Bar)", "영역 차트 (Area)"],
+            index=["원형 차트 (Pie)", "막대 차트 (Bar)", "영역 차트 (Area)"].index(st.session_state["chart_type"])
         )
-        c_bg = st.selectbox(
-            "배경 색상 모드:",
-            ["#F8FAFC", "#0F172A", "#F1F5F9", "#E2E8F0"],
-            format_func=lambda x: {"#F8FAFC": "클린 화이트", "#0F172A": "스텔스 다크", "#F1F5F9": "소프트 찰콜", "#E2E8F0": "메탈 그레이"}[x]
-        )
-        c_align = st.radio("타이틀 텍스트 정렬:", ["left", "center"], format_func=lambda x: "좌측 정렬" if x == "left" else "중앙 정렬")
+        
+        c_align = st.radio("타이틀 정렬:", ["left", "center"], format_func=lambda x: "좌측 정렬" if x == "left" else "중앙 정렬")
         c_icon = st.selectbox("부대 아이콘:", ["🛡️", "🎖️", "⚔️", "🦅"])
         c_title = st.text_input("메인 타이틀 문구:", value=st.session_state["custom_title"])
         
-        if st.button("🎨 디자인 설정 저장", type="primary", use_container_width=True):
-            st.session_state["primary_color"] = c_color
+        if st.button("🎨 설정 저장 및 즉시 적용", type="primary", use_container_width=True):
+            st.session_state["title_color"] = c_title_color
+            st.session_state["header_color"] = c_header_color
+            st.session_state["accent_color"] = c_accent_color
             st.session_state["bg_color"] = c_bg
+            st.session_state["chart_type"] = c_chart
             st.session_state["title_align"] = c_align
             st.session_state["unit_icon"] = c_icon
             st.session_state["custom_title"] = c_title
@@ -162,7 +176,7 @@ with st.sidebar:
         st.session_state["username"] = ""
         st.rerun()
 
-# 상단 헤더
+# 헤더
 header_txt = st.session_state["unit_icon"] + " [" + str(current_user["unit"]) + "] " + st.session_state["custom_title"]
 st.markdown('<div class="main-title">' + header_txt + '</div>', unsafe_allow_html=True)
 
@@ -239,7 +253,7 @@ if current_user["accessible_units"] == ["ALL"]:
 else:
     df = raw_df[raw_df["소속부대"].isin(current_user["accessible_units"])].copy()
 
-tab1, tab2 = st.tabs(["🤖 1. Gemini AI 인사 적합자 분석", "🚨 2. 예하부대 의무교육 관제 & 차트"])
+tab1, tab2 = st.tabs(["🤖 1. Gemini AI 인사 적합자 분석", "🚨 2. 예하부대 의무교육 관제 & 커스텀 차트"])
 
 # TAB 1
 with tab1:
@@ -247,7 +261,7 @@ with tab1:
     st.write("📊 관할 부대 인원: **총", len(df), "명**")
 
     user_prompt = st.text_input(
-        "💡 임무 요구사항 (자연어로 자유롭게 입력):",
+        "💡 임무 요구사항 (자연어로 입력):",
         value="내일 바로 구난차 끌고 출동할 수 있는 숙련된 간부 찾아줘"
     )
     top_n = st.slider("🎯 추출 인원 수:", min_value=1, max_value=5, value=3)
@@ -283,7 +297,7 @@ with tab1:
                             t = "🏅 " + str(r) + "순위: [" + str(it['소속부대']) + "] " + str(it['성명']) + " " + str(it['계급']) + " (" + str(it['적합도점수']) + "점)"
                             with st.expander(t, expanded=True):
                                 st.write("🤖 **판단 사유:**")
-                                st.info(it["추천사유"])
+                                st.markdown('<p class="accent-text">' + str(it["추천사유"]) + '</p>', unsafe_allow_html=True)
                     except Exception as e:
                         st.error("연동 오류: " + str(e))
                 else:
@@ -296,8 +310,8 @@ with tab1:
 
 # TAB 2
 with tab2:
-    st.subheader("📢 필수 의무교육 관제 및 인사 현황 차트")
-    st.write("접속 권한: **[" + str(current_user["unit"]) + "]**")
+    st.subheader("📢 필수 의무교육 관제 및 커스텀 차트")
+    st.write("접속 권한: **[" + str(current_user["unit"]) + "]** | 선택된 차트 스타일: **" + st.session_state["chart_type"] + "**")
 
     u_opts = ["관할 부대 전체"] + list(df["소속부대"].unique())
     sel_u = st.selectbox("📌 조회 부대 선택:", u_opts)
@@ -316,28 +330,49 @@ with tab2:
 
     st.divider()
 
-    # --- 데이터 기반 시각화 차트 추가 ---
+    # --- 선택 가능한 차트 시각화 영역 ---
     col_chart1, col_chart2 = st.columns(2)
+    
+    # 1. 병과 분포 차트
     with col_chart1:
         st.markdown("#### 📊 부대별 병과 분포 현황")
-        branch_counts = edf["병과"].value_counts().reset_index()
-        branch_counts.columns = ["병과", "인원수"]
-        fig_branch = px.bar(
-            branch_counts, x="병과", y="인원수", color="병과", 
-            text="인원수", color_discrete_sequence=px.colors.qualitative.Set2
-        )
-        fig_branch.update_layout(showlegend=False, margin=dict(l=10, r=10, t=30, b=10))
-        st.plotly_chart(fig_branch, use_container_width=True)
+        b_data = edf["병과"].value_counts()
+        
+        if st.session_state["chart_type"] == "원형 차트 (Pie)":
+            fig, ax = plt.subplots(figsize=(6, 4))
+            colors = ['#1E3A8A', '#2563EB', '#3B82F6', '#60A5FA', '#93C5FD', '#BFDBFE']
+            wedges, texts, autotexts = ax.pie(
+                b_data.values, labels=b_data.index, autopct='%1.1f%%',
+                startangle=140, colors=colors[:len(b_data)], wedgeprops=dict(width=0.4)
+            )
+            ax.axis('equal')
+            st.pyplot(fig)
+        elif st.session_state["chart_type"] == "영역 차트 (Area)":
+            st.area_chart(b_data)
+        else:
+            st.bar_chart(b_data)
 
+    # 2. 의무교육 미이수 분포 차트
     with col_chart2:
-        st.markdown("#### 📈 과목별 의무교육 이수 vs 미이수 현황")
-        edu_status = edf.groupby(["필수의무교육", "이수상태"]).size().reset_index(name="인원수")
-        fig_edu = px.bar(
-            edu_status, x="필수의무교육", y="인원수", color="이수상태", barmode="group",
-            color_discrete_map={"이수완료": "#10B981", "미이수": "#EF4444"}
-        )
-        fig_edu.update_layout(margin=dict(l=10, r=10, t=30, b=10))
-        st.plotly_chart(fig_edu, use_container_width=True)
+        st.markdown("#### 📈 의무교육 과목별 미이수자 분포")
+        e_data = un_df["필수의무교육"].value_counts()
+        
+        if len(e_data) == 0:
+            st.info("미이수자가 없습니다.")
+        else:
+            if st.session_state["chart_type"] == "원형 차트 (Pie)":
+                fig2, ax2 = plt.subplots(figsize=(6, 4))
+                colors2 = ['#EF4444', '#F87171', '#FCA5A5', '#FECACA']
+                ax2.pie(
+                    e_data.values, labels=e_data.index, autopct='%1.1f%%',
+                    startangle=140, colors=colors2[:len(e_data)], wedgeprops=dict(width=0.4)
+                )
+                ax2.axis('equal')
+                st.pyplot(fig2)
+            elif st.session_state["chart_type"] == "영역 차트 (Area)":
+                st.area_chart(e_data)
+            else:
+                st.bar_chart(e_data)
 
     st.divider()
     st.subheader("🚨 독려 대상자 목록")
