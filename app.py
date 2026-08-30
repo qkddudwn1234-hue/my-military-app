@@ -5,11 +5,6 @@ from datetime import date, timedelta
 import google.generativeai as genai
 import pandas as pd
 import streamlit as st
-import matplotlib.pyplot as plt
-
-# 한글 폰트 설정 (기본 폰트 패치)
-plt.rcParams['font.family'] = 'DejaVu Sans'
-plt.rcParams['axes.unicode_minus'] = False
 
 st.set_page_config(page_title="육군 인사 및 의무교육 관제 시스템", layout="wide")
 
@@ -29,7 +24,7 @@ if "accent_color" not in st.session_state:
 if "bg_color" not in st.session_state:
     st.session_state["bg_color"] = "#F8FAFC"
 if "chart_type" not in st.session_state:
-    st.session_state["chart_type"] = "원형 차트 (Pie)"
+    st.session_state["chart_type"] = "세로 막대 차트"
 if "unit_icon" not in st.session_state:
     st.session_state["unit_icon"] = "🛡️"
 if "title_align" not in st.session_state:
@@ -151,8 +146,8 @@ with st.sidebar:
         
         c_chart = st.selectbox(
             "시각화 차트 형태 선택:",
-            ["원형 차트 (Pie)", "막대 차트 (Bar)", "영역 차트 (Area)"],
-            index=["원형 차트 (Pie)", "막대 차트 (Bar)", "영역 차트 (Area)"].index(st.session_state["chart_type"])
+            ["세로 막대 차트", "영역 차트"],
+            index=["세로 막대 차트", "영역 차트"].index(st.session_state["chart_type"]) if st.session_state["chart_type"] in ["세로 막대 차트", "영역 차트"] else 0
         )
         
         c_align = st.radio("타이틀 정렬:", ["left", "center"], format_func=lambda x: "좌측 정렬" if x == "left" else "중앙 정렬")
@@ -253,7 +248,7 @@ if current_user["accessible_units"] == ["ALL"]:
 else:
     df = raw_df[raw_df["소속부대"].isin(current_user["accessible_units"])].copy()
 
-tab1, tab2 = st.tabs(["🤖 1. Gemini AI 인사 적합자 분석", "🚨 2. 예하부대 의무교육 관제 & 커스텀 차트"])
+tab1, tab2 = st.tabs(["🤖 1. Gemini AI 인사 적합자 분석", "🚨 2. 예하부대 의무교육 관제 & 차트"])
 
 # TAB 1
 with tab1:
@@ -310,99 +305,10 @@ with tab1:
 
 # TAB 2
 with tab2:
-    st.subheader("📢 필수 의무교육 관제 및 커스텀 차트")
+    st.subheader("📢 필수 의무교육 관제 및 차트")
     st.write("접속 권한: **[" + str(current_user["unit"]) + "]** | 선택된 차트 스타일: **" + st.session_state["chart_type"] + "**")
 
     u_opts = ["관할 부대 전체"] + list(df["소속부대"].unique())
     sel_u = st.selectbox("📌 조회 부대 선택:", u_opts)
 
-    edf = df if sel_u == "관할 부대 전체" else df[df["소속부대"] == sel_u].copy()
-    un_df = edf[edf["이수상태"] == "미이수"]
-    urg_df = un_df[un_df["D_Day"] <= 7]
-    comp = len(edf[edf["이수상태"] == "이수완료"])
-    rate = round((comp / len(edf)) * 100, 1) if len(edf) > 0 else 0
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("👥 대상 인원", str(len(edf)) + "명")
-    c2.metric("✅ 평균 이수율", str(rate) + "%")
-    c3.metric("❌ 미이수 인원", str(len(un_df)) + "명")
-    c4.metric("🚨 마감 임박(D-7)", str(len(urg_df)) + "명")
-
-    st.divider()
-
-    # --- 선택 가능한 차트 시각화 영역 ---
-    col_chart1, col_chart2 = st.columns(2)
-    
-    # 1. 병과 분포 차트
-    with col_chart1:
-        st.markdown("#### 📊 부대별 병과 분포 현황")
-        b_data = edf["병과"].value_counts()
-        
-        if st.session_state["chart_type"] == "원형 차트 (Pie)":
-            fig, ax = plt.subplots(figsize=(6, 4))
-            colors = ['#1E3A8A', '#2563EB', '#3B82F6', '#60A5FA', '#93C5FD', '#BFDBFE']
-            wedges, texts, autotexts = ax.pie(
-                b_data.values, labels=b_data.index, autopct='%1.1f%%',
-                startangle=140, colors=colors[:len(b_data)], wedgeprops=dict(width=0.4)
-            )
-            ax.axis('equal')
-            st.pyplot(fig)
-        elif st.session_state["chart_type"] == "영역 차트 (Area)":
-            st.area_chart(b_data)
-        else:
-            st.bar_chart(b_data)
-
-    # 2. 의무교육 미이수 분포 차트
-    with col_chart2:
-        st.markdown("#### 📈 의무교육 과목별 미이수자 분포")
-        e_data = un_df["필수의무교육"].value_counts()
-        
-        if len(e_data) == 0:
-            st.info("미이수자가 없습니다.")
-        else:
-            if st.session_state["chart_type"] == "원형 차트 (Pie)":
-                fig2, ax2 = plt.subplots(figsize=(6, 4))
-                colors2 = ['#EF4444', '#F87171', '#FCA5A5', '#FECACA']
-                ax2.pie(
-                    e_data.values, labels=e_data.index, autopct='%1.1f%%',
-                    startangle=140, colors=colors2[:len(e_data)], wedgeprops=dict(width=0.4)
-                )
-                ax2.axis('equal')
-                st.pyplot(fig2)
-            elif st.session_state["chart_type"] == "영역 차트 (Area)":
-                st.area_chart(e_data)
-            else:
-                st.bar_chart(e_data)
-
-    st.divider()
-    st.subheader("🚨 독려 대상자 목록")
-
-    if len(urg_df) == 0:
-        st.success("🎉 마감 임박 미이수자가 없습니다.")
-    else:
-        for idx, row in urg_df.sort_values(by="D_Day").head(15).iterrows():
-            if row["D_Day"] >= 0:
-                d_str = "D-" + str(row["D_Day"]) + "일"
-            else:
-                d_str = "마감 " + str(abs(row["D_Day"])) + "일 경과"
-            
-            err_msg = "⚠️ [" + str(row["소속부대"]) + "] " + str(row["성명"]) + " " + str(row["계급"]) + " | 과목: " + str(row["필수의무교육"]) + " | 마감: " + str(row["교육마감일"]) + " (" + d_str + ")"
-            st.error(err_msg)
-
-    st.divider()
-    st.subheader("📋 상세 현황 필터링")
-
-    f1, f2 = st.columns(2)
-    with f1:
-        c_sel = st.selectbox("과목 선택:", ["전체", "자살예방교육", "성폭력 예방교육", "보안 및 정보보호교육", "군대윤리교육"])
-    with f2:
-        s_sel = st.selectbox("이수 상태 선택:", ["전체", "미이수", "이수완료"])
-
-    fdf = edf.copy()
-    if c_sel != "전체":
-        fdf = fdf[fdf["필수의무교육"] == c_sel]
-    if s_sel != "전체":
-        fdf = fdf[fdf["이수상태"] == s_sel]
-
-    ec = ["소속부대", "군번", "성명", "계급", "병과", "필수의무교육", "이수상태", "교육마감일", "D_Day"]
-    st.dataframe(fdf[ec].sort_values(by=["이수상태", "D_Day"]), use_container_width=True, hide_index=True)
+    edf = df if sel_u == "관
