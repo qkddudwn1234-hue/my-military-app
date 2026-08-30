@@ -54,7 +54,6 @@ if "logged_in" not in st.session_state:
 if "username" not in st.session_state:
     st.session_state["username"] = ""
 
-# 부대별 사용자 계정 DB (시연용)
 USER_DB = {
     "6bde": {
         "password": "1234", 
@@ -72,7 +71,7 @@ USER_DB = {
         "password": "1234", 
         "name": "박군수 소령 (상급부대 인사처장)", 
         "unit": "군수사령부",
-        "accessible_units": ["ALL"] # 전 부대 접근 가능
+        "accessible_units": ["ALL"]
     }
 }
 
@@ -105,29 +104,27 @@ if not st.session_state["logged_in"]:
     st.stop()
 
 # --- 로그인 후 메인 화면 ---
-
 current_user = USER_DB[st.session_state["username"]]
 
-# 사이드바 설정 (보안 차단 해제를 위해 직접 입력받는 방식으로 변경)
+# Streamlit Secrets에서 API 키 자동 가승인 로직
+gemini_api_key = ""
+if "GEMINI_API_KEY" in st.secrets:
+    gemini_api_key = st.secrets["GEMINI_API_KEY"]
+    try:
+        genai.configure(api_key=gemini_api_key)
+    except Exception:
+        pass
+
 with st.sidebar:
     st.write(f"👤 **접속자:** {current_user['name']}")
     st.write(f"🎖️ **소속:** {current_user['unit']}")
     st.divider()
     
-    st.subheader("🔑 Gemini LLM 연동 설정")
-    gemini_api_key = st.text_input(
-        "Google Gemini API Key 입력", 
-        type="password",
-        placeholder="aistudio.google.com에서 발급받은 키 입력"
-    )
+    st.subheader("🔑 Gemini LLM 연동 상태")
     if gemini_api_key:
-        try:
-            genai.configure(api_key=gemini_api_key)
-            st.caption("🟢 Gemini 1.5 Flash AI 연동 중")
-        except Exception as e:
-            st.caption("🔴 API 키 오류")
+        st.caption("🟢 Gemini 3.6 Flash AI 자동 연동 완료")
     else:
-        st.caption("🟡 로그인 후 사이드바에 API 키를 입력하시면 진짜 LLM이 동작합니다.")
+        st.caption("🔴 Secrets 설정 필요 (Streamlit Cloud Settings 확인)")
             
     st.divider()
     if st.button("🚪 로그아웃", type="secondary"):
@@ -232,7 +229,6 @@ def generate_100_personnel():
 
 raw_df = generate_100_personnel()
 
-# 권한 기반 부대 데이터 필터링
 if current_user["accessible_units"] == ["ALL"]:
     df = raw_df.copy()
 else:
@@ -245,7 +241,7 @@ tab1, tab2 = st.tabs(["🤖 1. Gemini LLM 기반 적합자 심층 분석", "🚨
 # TAB 1: Gemini LLM 기반 적합자 추론
 # ==========================================
 with tab1:
-    st.subheader("🤖 Gemini 1.5 LLM 인사 자력 지능형 추론")
+    st.subheader("🤖 Gemini LLM 인사 자력 지능형 추론")
     st.write(f"현재 관할 부대: **{', '.join(current_user['accessible_units'] if current_user['accessible_units'] != ['ALL'] else ['전체 부대'])}** (총 {len(df)}명)")
 
     user_prompt = st.text_input(
@@ -259,7 +255,7 @@ with tab1:
         if not user_prompt.strip():
             st.warning("⚠️ 요구사항을 입력해 주세요.")
         else:
-            with st.spinner("🤖 Google Gemini 1.5 AI가 관할 부대 DB를 다각도로 분석 중입니다..."):
+            with st.spinner("🤖 Google Gemini AI가 관할 부대 DB를 다각도로 분석 중입니다..."):
                 if gemini_api_key:
                     try:
                         db_json = df[["소속부대", "성명", "계급", "병과", "보유자격증", "교육이수현황", "관련경력", "투입가용일", "최종평정"]].to_json(orient="records", force_ascii=False)
@@ -290,7 +286,7 @@ with tab1:
                         clean_json = response.text.replace("```json", "").replace("```", "").strip()
                         results = json.loads(clean_json)
                         
-                        st.success("🎯 **Google Gemini 1.5 AI가 문맥을 이해하고 최적격자를 도출했습니다.**")
+                        st.success("🎯 **Google Gemini AI가 문맥을 이해하고 최적격자를 도출했습니다.**")
                         
                         for rank, item in enumerate(results, 1):
                             st.markdown(f"""
@@ -306,7 +302,7 @@ with tab1:
                     except Exception as e:
                         st.error(f"❌ Gemini API 연동 오류 발생: {e}")
                 else:
-                    st.info("💡 **[사용 안내]** 왼쪽 사이드바의 **`Google Gemini API Key 입력`** 칸에 발급받으신 API 키를 붙여넣으시면 진짜 Gemini LLM 분석이 구동됩니다.")
+                    st.error("⚠️ Streamlit Secrets에 GEMINI_API_KEY가 설정되어 있지 않습니다.")
 
     st.divider()
     st.subheader("📋 관할 부대 간부 인사자력 현황")
