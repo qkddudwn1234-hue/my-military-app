@@ -98,7 +98,7 @@ with st.sidebar:
         st.session_state["username"] = ""
         st.rerun()
 
-st.title("🤖 [" + current_user["unit"] + "] LLM 인사 & 의무교육 관제")
+st.title(f"🤖 [{current_user['unit']}] LLM 인사 & 의무교육 관제")
 
 @st.cache_data
 def generate_personnel_db():
@@ -136,7 +136,7 @@ def generate_personnel_db():
     data = []
     for i in range(1, 301):
         name = random.choice(last_names) + random.choice(first_names)
-        sn = str(random.randint(15, 25)) + "-" + str(10000 + i)
+        sn = f"{random.randint(15, 25)}-{10000 + i}"
         rank = random.choice(ranks)
         branch = random.choice(branches)
         
@@ -153,7 +153,7 @@ def generate_personnel_db():
             cert = random.choice(cert_pool)
             edu = random.choice(edu_pool)
             
-        exp = str(random.randint(1, 15)) + "년"
+        exp = f"{random.randint(1, 15)}년"
         avail = random.choice(avail_pool)
         rating = random.choice(ratings)
         course_target = random.choice(courses)
@@ -196,7 +196,7 @@ tab1, tab2 = st.tabs([
 
 with tab1:
     st.subheader("🤖 Gemini LLM 인사 자력 추론")
-    st.write("관할 부대 인원: **총 " + str(len(df)) + "명**")
+    st.write("관할 부대 인원: **총", len(df), "명**")
 
     user_prompt = st.text_input(
         "임무 요구사항 입력:",
@@ -237,14 +237,15 @@ with tab1:
                         ]
                         db_json = target_df[cols].to_json(orient="records", force_ascii=False)
                         
-                        prompt_text = (
-                            "육군 인사참모 AI다. DB에서 요구사항에 부합하는 간부 상위 "
-                            + str(top_n) + "명을 선발해라.\n\n"
-                            + "[요구사항]: " + user_prompt + "\n"
-                            + "[DB]: " + db_json + "\n\n"
-                            + "반드시 JSON 배열 형식으로만 응답해라.\n"
-                            + "[{\"성명\":\"이름\",\"계급\":\"계급\",\"소속부대\":\"부대명\",\"적합도점수\":95,\"추천사유\":\"사유\"}]"
-                        )
+                        prompt_text = f"""
+                        육군 인사참모 AI다. DB에서 요구사항에 부합하는 간부 상위 {top_n}명을 선발해라.
+
+                        [요구사항]: {user_prompt}
+                        [DB]: {db_json}
+
+                        반드시 JSON 배열 형식으로만 응답해라.
+                        [{{\"성명\":\"이름\",\"계급\":\"계급\",\"소속부대\":\"부대명\",\"적합도점수\":95,\"추천사유\":\"사유\"}}]
+                        """
                         
                         model = genai.GenerativeModel("gemini-3.6-flash")
                         response = model.generate_content(prompt_text)
@@ -252,17 +253,25 @@ with tab1:
                         clean_text = re.sub(r"```(?:json)?", "", response.text).strip()
                         results = json.loads(clean_text)
                         
-                        st.success("🎯 최적격자 " + str(len(results)) + "명 도출 완료")
+                        st.success(f"🎯 최적격자 {len(results)}명 도출 완료")
                         
                         for rank, item in enumerate(results, 1):
-                            t_msg = (
-                                "🏅 " + str(rank) + "순위: [" + str(item["소속부대"])
-                                + "] " + str(item["성명"]) + " " + str(item["계급"])
-                                + " (" + str(item["적합도점수"]) + "점)"
-                            )
+                            t_msg = f"🏅 {rank}순위: [{item['소속부대']}] {item['성명']} {item['계급']} ({item['적합도점수']}점)"
                             with st.expander(t_msg, expanded=True):
                                 st.write("🤖 **판단 사유:**")
                                 st.info(item["추천사유"])
                             
                     except Exception as e:
-                        st.error("
+                        st.error("❌ 연동 오류:", str(e))
+                else:
+                    st.error("⚠️ GEMINI_API_KEY 설정이 필요합니다.")
+
+    st.divider()
+    st.subheader(f"📋 인사자력 현황 (총 {len(df)}명)")
+    disp_cols = [
+        "소속부대", "군번", "성명", "계급", "병과",
+        "보유자격증", "교육이수현황", "관련경력", "투입가용일", "최종평정"
+    ]
+    st.dataframe(df[disp_cols], use_container_width=True, hide_index=True)
+
+with
