@@ -312,7 +312,21 @@ with tab1:
                         st.success(f"🎯 **Google Gemini AI가 최적격자 {len(results)}명을 도출했습니다.**")
                         
                         for rank, item in enumerate(results, 1):
-                            st.markdown(
-                                '<div class="card-box">'
-                                '<h4 style="margin:0; color:#1E3A8A;">🏅 ' + str(rank) + '순위 추천: [' + str(item["소속부대"]) + '] ' + str(item["성명"]) + ' ' + str(item["계급"]) + ' (적합도 점수: ' + str(item["적합도점수"]) + '점)</h4>'
-                                '<p style="margin:8px 0 0 0; line-height:
+                            html_parts = [
+                                '<div class="card-box">',
+                                f'<h4 style="margin:0; color:#1E3A8A;">🏅 {rank}순위 추천: [{item["소속부대"]}] {item["성명"]} {item["계급"]} (적합도 점수: {item["적합도점수"]}점)</h4>',
+                                '<p style="margin:8px 0 0 0; line-height:1.6;">',
+                                '🤖 <b>Gemini 참모 AI 판단 사유:</b><br>',
+                                f'<span style="color:#1D4ED8; font-weight:bold;">{item["추천사유"]}</span>',
+                                '</p>',
+                                '</div>'
+                            ]
+                            st.markdown("".join(html_parts), unsafe_allow_html=True)
+                            
+                    except Exception as e:
+                        st.error(f"❌ Gemini API 연동 오류 발생: {e}")
+                else:
+                    st.error("⚠️ Streamlit Secrets에 GEMINI_API_KEY가 설정되어 있지 않습니다.")
+
+    st.divider()
+    st.subheader(f"📋
