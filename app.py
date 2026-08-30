@@ -54,24 +54,19 @@ USER_DB = {
 
 if not st.session_state["logged_in"]:
     st.title("🔒 부대별 관제 시스템 - 로그인")
-    
-    col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
-    with col_l2:
-        st.info("💡 테스트 계정: 6bde / 101bn / HQ (비번: 1234)")
-        with st.form("login_form"):
-            input_user = st.text_input("아이디")
-            input_pw = st.text_input("비밀번호", type="password")
-            submit_button = st.form_submit_button(
-                "로그인", type="primary", use_container_width=True
-            )
-            if submit_button:
-                if input_user in USER_DB and USER_DB[input_user]["password"] == input_pw:
-                    st.session_state["logged_in"] = True
-                    st.session_state["username"] = input_user
-                    st.success("로그인 성공!")
-                    st.rerun()
-                else:
-                    st.error("❌ 정보가 올바르지 않습니다.")
+    st.info("💡 테스트 계정: 6bde / 101bn / HQ (비번: 1234)")
+    with st.form("login_form"):
+        input_user = st.text_input("아이디")
+        input_pw = st.text_input("비밀번호", type="password")
+        submit_button = st.form_submit_button("로그인", type="primary", use_container_width=True)
+        if submit_button:
+            if input_user in USER_DB and USER_DB[input_user]["password"] == input_pw:
+                st.session_state["logged_in"] = True
+                st.session_state["username"] = input_user
+                st.success("로그인 성공!")
+                st.rerun()
+            else:
+                st.error("❌ 정보가 올바르지 않습니다.")
     st.stop()
 
 current_user = USER_DB[st.session_state["username"]]
@@ -98,7 +93,7 @@ with st.sidebar:
         st.session_state["username"] = ""
         st.rerun()
 
-st.title(f"🤖 [{current_user['unit']}] LLM 인사 & 의무교육 관제")
+st.title("🤖 [" + current_user["unit"] + "] LLM 인사 & 의무교육 관제")
 
 @st.cache_data
 def generate_personnel_db():
@@ -136,7 +131,7 @@ def generate_personnel_db():
     data = []
     for i in range(1, 301):
         name = random.choice(last_names) + random.choice(first_names)
-        sn = f"{random.randint(15, 25)}-{10000 + i}"
+        sn = str(random.randint(15, 25)) + "-" + str(10000 + i)
         rank = random.choice(ranks)
         branch = random.choice(branches)
         
@@ -153,7 +148,7 @@ def generate_personnel_db():
             cert = random.choice(cert_pool)
             edu = random.choice(edu_pool)
             
-        exp = f"{random.randint(1, 15)}년"
+        exp = str(random.randint(1, 15)) + "년"
         avail = random.choice(avail_pool)
         rating = random.choice(ratings)
         course_target = random.choice(courses)
@@ -189,14 +184,11 @@ if current_user["accessible_units"] == ["ALL"]:
 else:
     df = raw_df[raw_df["소속부대"].isin(current_user["accessible_units"])].copy()
 
-tab1, tab2 = st.tabs([
-    "🤖 1. 적합자 분석",
-    "🚨 2. 의무교육 관제"
-])
+tab1, tab2 = st.tabs(["🤖 1. 적합자 분석", "🚨 2. 의무교육 관제"])
 
 with tab1:
     st.subheader("🤖 Gemini LLM 인사 자력 추론")
-    st.write("관할 부대 인원: **총", len(df), "명**")
+    st.write("관할 부대 인원: **총 " + str(len(df)) + "명**")
 
     user_prompt = st.text_input(
         "임무 요구사항 입력:",
@@ -213,10 +205,7 @@ with tab1:
                 if gemini_api_key:
                     try:
                         prompt_lower = user_prompt.lower()
-                        keywords = [
-                            w for w in ["구난", "운전", "드론", "통신", "위험물", "보급"]
-                            if w in prompt_lower
-                        ]
+                        keywords = [w for w in ["구난", "운전", "드론", "통신", "위험물", "보급"] if w in prompt_lower]
                         
                         if keywords:
                             pattern = "|".join(keywords)
@@ -231,21 +220,10 @@ with tab1:
                             filtered_candidates = df.head(20)
                             
                         target_df = filtered_candidates.head(15)
-                        cols = [
-                            "소속부대", "성명", "계급", "병과",
-                            "보유자격증", "교육이수현황", "관련경력", "투입가용일", "최종평정"
-                        ]
+                        cols = ["소속부대", "성명", "계급", "병과", "보유자격증", "교육이수현황", "관련경력", "투입가용일", "최종평정"]
                         db_json = target_df[cols].to_json(orient="records", force_ascii=False)
                         
-                        prompt_text = f"""
-                        육군 인사참모 AI다. DB에서 요구사항에 부합하는 간부 상위 {top_n}명을 선발해라.
-
-                        [요구사항]: {user_prompt}
-                        [DB]: {db_json}
-
-                        반드시 JSON 배열 형식으로만 응답해라.
-                        [{{\"성명\":\"이름\",\"계급\":\"계급\",\"소속부대\":\"부대명\",\"적합도점수\":95,\"추천사유\":\"사유\"}}]
-                        """
+                        prompt_text = "육군 인사참모 AI다. DB에서 요구사항에 부합하는 간부 상위 " + str(top_n) + "명을 선발해라.\n\n[요구사항]: " + user_prompt + "\n[DB]: " + db_json + "\n\n반드시 JSON 배열 형식으로만 응답해라.\n[{\"성명\":\"이름\",\"계급\":\"계급\",\"소속부대\":\"부대명\",\"적합도점수\":95,\"추천사유\":\"사유\"}]"
                         
                         model = genai.GenerativeModel("gemini-3.6-flash")
                         response = model.generate_content(prompt_text)
@@ -253,25 +231,19 @@ with tab1:
                         clean_text = re.sub(r"```(?:json)?", "", response.text).strip()
                         results = json.loads(clean_text)
                         
-                        st.success(f"🎯 최적격자 {len(results)}명 도출 완료")
+                        st.success("🎯 최적격자 " + str(len(results)) + "명 도출 완료")
                         
                         for rank, item in enumerate(results, 1):
-                            t_msg = f"🏅 {rank}순위: [{item['소속부대']}] {item['성명']} {item['계급']} ({item['적합도점수']}점)"
+                            t_msg = "🏅 " + str(rank) + "순위: [" + str(item["소속부대"]) + "] " + str(item["성명"]) + " " + str(item["계급"]) + " (" + str(item["적합도점수"]) + "점)"
                             with st.expander(t_msg, expanded=True):
                                 st.write("🤖 **판단 사유:**")
                                 st.info(item["추천사유"])
                             
                     except Exception as e:
-                        st.error("❌ 연동 오류:", str(e))
+                        st.error("❌ 연동 오류: " + str(e))
                 else:
                     st.error("⚠️ GEMINI_API_KEY 설정이 필요합니다.")
 
     st.divider()
-    st.subheader(f"📋 인사자력 현황 (총 {len(df)}명)")
-    disp_cols = [
-        "소속부대", "군번", "성명", "계급", "병과",
-        "보유자격증", "교육이수현황", "관련경력", "투입가용일", "최종평정"
-    ]
-    st.dataframe(df[disp_cols], use_container_width=True, hide_index=True)
-
-with
+    st.subheader("📋 인사자력 현황 (총 " + str(len(df)) + "명)")
+    disp_cols =
