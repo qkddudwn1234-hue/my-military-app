@@ -8,13 +8,11 @@ import streamlit as st
 
 st.set_page_config(page_title="육군 인사 및 의무교육 관제 시스템", layout="wide")
 
-# 1. 세션 상태 초기화
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 if "username" not in st.session_state:
     st.session_state["username"] = ""
 
-# 관리자 커스텀 세션 상태 (컬러 및 차트 형태)
 if "title_color" not in st.session_state:
     st.session_state["title_color"] = "#1E3A8A"
 if "header_color" not in st.session_state:
@@ -24,39 +22,37 @@ if "accent_color" not in st.session_state:
 if "bg_color" not in st.session_state:
     st.session_state["bg_color"] = "#F8FAFC"
 if "chart_type" not in st.session_state:
-    st.session_state["chart_type"] = "세로 막대 차트"
+    st.session_state["chart_type"] = "막대 차트"
 if "unit_icon" not in st.session_state:
     st.session_state["unit_icon"] = "🛡️"
 if "title_align" not in st.session_state:
     st.session_state["title_align"] = "left"
 if "custom_title" not in st.session_state:
-    st.session_state["custom_title"] = "LLM 인사 자력 & 의무교육 통합 관제 대시보드"
+    st.session_state["custom_title"] = "LLM 인사 자력 및 의무교육 관제"
 
-# Dynamic CSS
 st.markdown(
     '<style>'
-    'body, .stApp { background-color: ' + st.session_state["bg_color"] + ' !important; }'
+    'body, .stApp { background-color: ' + str(st.session_state["bg_color"]) + ' !important; }'
     '.main-title {'
-    '    font-size: 26px !important;'
+    '    font-size: 24px !important;'
     '    font-weight: 900 !important;'
-    '    color: ' + st.session_state["title_color"] + ';'
-    '    text-align: ' + st.session_state["title_align"] + ';'
-    '    border-bottom: 3px solid ' + st.session_state["title_color"] + ';'
-    '    padding-bottom: 10px;'
-    '    margin-bottom: 20px;'
+    '    color: ' + str(st.session_state["title_color"]) + ';'
+    '    text-align: ' + str(st.session_state["title_align"]) + ';'
+    '    border-bottom: 3px solid ' + str(st.session_state["title_color"]) + ';'
+    '    padding-bottom: 8px;'
+    '    margin-bottom: 15px;'
     '}'
     'h2, h3, h4 {'
-    '    color: ' + st.session_state["header_color"] + ' !important;'
+    '    color: ' + str(st.session_state["header_color"]) + ' !important;'
     '}'
     '.accent-text {'
-    '    color: ' + st.session_state["accent_color"] + ' !important;'
+    '    color: ' + str(st.session_state["accent_color"]) + ' !important;'
     '    font-weight: bold;'
     '}'
     '</style>',
     unsafe_allow_html=True
 )
 
-# 계정 DB (admin 비공개)
 USER_DB = {
     "admin": {
         "password": "1234",
@@ -94,14 +90,13 @@ USER_DB = {
     }
 }
 
-# 로그인 UI (admin 화면 노출 안 됨)
 if not st.session_state["logged_in"]:
-    st.markdown('<div class="main-title">🛡️ 대한민국 육군 통합 관제 시스템</div>', unsafe_allow_html=True)
-    st.info("💡 **부대별 계정 정보:** 6여단 (`6bde`) | 101대대 (`101bn`) | 상급부대 (`HQ`) - 비밀번호: `1234`")
+    st.markdown('<div class="main-title">🛡️ 대한민국 육군 관제 시스템</div>', unsafe_allow_html=True)
+    st.info("💡 계정 정보: 6여단 (`6bde`) | 101대대 (`101bn`) | 상급부대 (`HQ`) - 비번: `1234`")
     
     with st.form("login_form"):
-        u = st.text_input("아이디 (ID)")
-        p = st.text_input("비밀번호 (PW)", type="password")
+        u = st.text_input("아이디")
+        p = st.text_input("비밀번호", type="password")
         if st.form_submit_button("로그인", type="primary", use_container_width=True):
             if u in USER_DB and USER_DB[u]["password"] == p:
                 st.session_state["logged_in"] = True
@@ -121,40 +116,31 @@ if "GEMINI_API_KEY" in st.secrets:
     except Exception:
         pass
 
-# 사이드바 설정
 with st.sidebar:
-    st.markdown("### " + st.session_state["unit_icon"] + " 접속 프로필")
+    st.markdown("### " + str(st.session_state["unit_icon"]) + " 접속 프로필")
     st.write("성명:", current_user["name"])
     st.write("소속:", current_user["unit"])
     st.divider()
     
     st.markdown("### 🔑 AI 참모 연동")
     if gemini_api_key:
-        st.success("🟢 Gemini 3.6 Flash 연동")
+        st.success("🟢 Gemini AI 연동")
     else:
-        st.warning("🔴 API Key 설정 필요")
+        st.warning("🔴 API Key 필요")
     st.divider()
 
-    # 관리자 비밀 디자인 & 차트 컨트롤러
     if current_user.get("role") == "ADMIN":
-        st.markdown("### 🎨 Admin 디자인 & 차트 커스텀")
+        st.markdown("### 🎨 Admin 커스텀")
+        c_title_color = st.color_picker("타이틀 색상", st.session_state["title_color"])
+        c_header_color = st.color_picker("헤더 색상", st.session_state["header_color"])
+        c_accent_color = st.color_picker("강조 색상", st.session_state["accent_color"])
+        c_bg = st.color_picker("배경 색상", st.session_state["bg_color"])
+        c_chart = st.selectbox("차트 형태:", ["막대 차트", "영역 차트"])
+        c_align = st.radio("정렬:", ["left", "center"])
+        c_icon = st.selectbox("아이콘:", ["🛡️", "🎖️", "⚔️", "🦅"])
+        c_title = st.text_input("타이틀 문구:", value=st.session_state["custom_title"])
         
-        c_title_color = st.color_picker("메인 타이틀 텍스트 색상", st.session_state["title_color"])
-        c_header_color = st.color_picker("서브 헤더 텍스트 색상", st.session_state["header_color"])
-        c_accent_color = st.color_picker("강조 텍스트 색상", st.session_state["accent_color"])
-        c_bg = st.color_picker("대시보드 배경 색상", st.session_state["bg_color"])
-        
-        c_chart = st.selectbox(
-            "시각화 차트 형태 선택:",
-            ["세로 막대 차트", "영역 차트"],
-            index=["세로 막대 차트", "영역 차트"].index(st.session_state["chart_type"]) if st.session_state["chart_type"] in ["세로 막대 차트", "영역 차트"] else 0
-        )
-        
-        c_align = st.radio("타이틀 정렬:", ["left", "center"], format_func=lambda x: "좌측 정렬" if x == "left" else "중앙 정렬")
-        c_icon = st.selectbox("부대 아이콘:", ["🛡️", "🎖️", "⚔️", "🦅"])
-        c_title = st.text_input("메인 타이틀 문구:", value=st.session_state["custom_title"])
-        
-        if st.button("🎨 설정 저장 및 즉시 적용", type="primary", use_container_width=True):
+        if st.button("🎨 설정 저장", type="primary", use_container_width=True):
             st.session_state["title_color"] = c_title_color
             st.session_state["header_color"] = c_header_color
             st.session_state["accent_color"] = c_accent_color
@@ -171,8 +157,7 @@ with st.sidebar:
         st.session_state["username"] = ""
         st.rerun()
 
-# 헤더
-header_txt = st.session_state["unit_icon"] + " [" + str(current_user["unit"]) + "] " + st.session_state["custom_title"]
+header_txt = str(st.session_state["unit_icon"]) + " [" + str(current_user["unit"]) + "] " + str(st.session_state["custom_title"])
 st.markdown('<div class="main-title">' + header_txt + '</div>', unsafe_allow_html=True)
 
 @st.cache_data
@@ -248,15 +233,14 @@ if current_user["accessible_units"] == ["ALL"]:
 else:
     df = raw_df[raw_df["소속부대"].isin(current_user["accessible_units"])].copy()
 
-tab1, tab2 = st.tabs(["🤖 1. Gemini AI 인사 적합자 분석", "🚨 2. 예하부대 의무교육 관제 & 차트"])
+tab1, tab2 = st.tabs(["🤖 1. AI 인사 분석", "🚨 2. 의무교육 관제"])
 
-# TAB 1
 with tab1:
     st.subheader("🤖 Gemini 참모 AI 적합자 분석")
     st.write("📊 관할 부대 인원: **총", len(df), "명**")
 
     user_prompt = st.text_input(
-        "💡 임무 요구사항 (자연어로 입력):",
+        "💡 임무 요구사항:",
         value="내일 바로 구난차 끌고 출동할 수 있는 숙련된 간부 찾아줘"
     )
     top_n = st.slider("🎯 추출 인원 수:", min_value=1, max_value=5, value=3)
@@ -303,12 +287,81 @@ with tab1:
     d_cols = ["소속부대", "군번", "성명", "계급", "병과", "보유자격증", "교육이수현황", "관련경력", "투입가용일", "최종평정"]
     st.dataframe(df[d_cols], use_container_width=True, hide_index=True)
 
-# TAB 2
 with tab2:
-    st.subheader("📢 필수 의무교육 관제 및 차트")
-    st.write("접속 권한: **[" + str(current_user["unit"]) + "]** | 선택된 차트 스타일: **" + st.session_state["chart_type"] + "**")
+    st.subheader("📢 필수 의무교육 관제")
+    st.write("접속 권한: **[" + str(current_user["unit"]) + "]**")
 
-    u_opts = ["관할 부대 전체"] + list(df["소속부대"].unique())
+    u_opts = ["전체"] + list(df["소속부대"].unique())
     sel_u = st.selectbox("📌 조회 부대 선택:", u_opts)
 
-    edf = df if sel_u == "관
+    if sel_u == "전체":
+        edf = df.copy()
+    else:
+        edf = df[df["소속부대"] == sel_u].copy()
+
+    un_df = edf[edf["이수상태"] == "미이수"]
+    urg_df = un_df[un_df["D_Day"] <= 7]
+    comp = len(edf[edf["이수상태"] == "이수완료"])
+    rate = round((comp / len(edf)) * 100, 1) if len(edf) > 0 else 0
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("👥 대상 인원", str(len(edf)) + "명")
+    c2.metric("✅ 평균 이수율", str(rate) + "%")
+    c3.metric("❌ 미이수 인원", str(len(un_df)) + "명")
+    c4.metric("🚨 마감 임박", str(len(urg_df)) + "명")
+
+    st.divider()
+
+    col_chart1, col_chart2 = st.columns(2)
+    
+    with col_chart1:
+        st.markdown("#### 📊 부대별 병과 분포")
+        b_data = edf["병과"].value_counts()
+        if st.session_state["chart_type"] == "영역 차트":
+            st.area_chart(b_data)
+        else:
+            st.bar_chart(b_data)
+
+    with col_chart2:
+        st.markdown("#### 📈 과목별 미이수자 분포")
+        e_data = un_df["필수의무교육"].value_counts()
+        if len(e_data) == 0:
+            st.info("미이수자가 없습니다.")
+        else:
+            if st.session_state["chart_type"] == "영역 차트":
+                st.area_chart(e_data)
+            else:
+                st.bar_chart(e_data)
+
+    st.divider()
+    st.subheader("🚨 독려 대상자 목록")
+
+    if len(urg_df) == 0:
+        st.success("🎉 마감 임박 미이수자가 없습니다.")
+    else:
+        for idx, row in urg_df.sort_values(by="D_Day").head(15).iterrows():
+            if row["D_Day"] >= 0:
+                d_str = "D-" + str(row["D_Day"]) + "일"
+            else:
+                d_str = "마감 " + str(abs(row["D_Day"])) + "일 경과"
+            
+            err_msg = "⚠️ [" + str(row["소속부대"]) + "] " + str(row["성명"]) + " " + str(row["계급"]) + " | 과목: " + str(row["필수의무교육"]) + " | 마감: " + str(row["교육마감일"]) + " (" + d_str + ")"
+            st.error(err_msg)
+
+    st.divider()
+    st.subheader("📋 상세 현황 필터링")
+
+    f1, f2 = st.columns(2)
+    with f1:
+        c_sel = st.selectbox("과목 선택:", ["전체", "자살예방교육", "성폭력 예방교육", "보안 및 정보보호교육", "군대윤리교육"])
+    with f2:
+        s_sel = st.selectbox("이수 상태 선택:", ["전체", "미이수", "이수완료"])
+
+    fdf = edf.copy()
+    if c_sel != "전체":
+        fdf = fdf[fdf["필수의무교육"] == c_sel]
+    if s_sel != "전체":
+        fdf = fdf[fdf["이수상태"] == s_sel]
+
+    ec = ["소속부대", "군번", "성명", "계급", "병과", "필수의무교육", "이수상태", "교육마감일", "D_Day"]
+    st.dataframe(fdf[ec].sort_values(by=["이수상태", "D_Day"]), use_container_width=True, hide_index=True)
