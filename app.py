@@ -120,8 +120,8 @@ if "GEMINI_API_KEY" in st.secrets:
         pass
 
 with st.sidebar:
-    st.write(f"👤 **접속자:** {current_user['name']}")
-    st.write(f"🎖️ **소속:** {current_user['unit']}")
+    st.write("👤 **접속자:** {}".format(current_user['name']))
+    st.write("🎖️ **소속:** {}".format(current_user['unit']))
     st.divider()
     
     st.subheader("🔑 Gemini LLM 연동 상태")
@@ -136,7 +136,8 @@ with st.sidebar:
         st.session_state["username"] = ""
         st.rerun()
 
-st.markdown(f'<div class="main-header">🤖 [{current_user["unit"]}] Gemini LLM 인사 & 의무교육 통합 관제</div>', unsafe_allow_html=True)
+header_title = '<div class="main-header">🤖 [{}] Gemini LLM 인사 & 의무교육 통합 관제</div>'.format(current_user["unit"])
+st.markdown(header_title, unsafe_allow_html=True)
 
 # 4. 고속 데이터베이스 생성 (300명)
 @st.cache_data
@@ -173,7 +174,7 @@ def generate_personnel_db():
     for i in range(1, 301):
         name = random.choice(last_names) + random.choice(first_names)
         year = random.randint(15, 25)
-        sn = f"{year}-{10000 + i}"
+        sn = "{}-{}".format(year, 10000 + i)
         rank = random.choice(ranks)
         branch = random.choice(branches)
         
@@ -202,7 +203,7 @@ def generate_personnel_db():
             cert = random.choice(cert_pool) + ", " + random.choice(cert_pool)
             edu = random.choice(edu_pool)
             
-        exp = f"{random.randint(1, 15)}년"
+        exp = "{}년".format(random.randint(1, 15))
         avail = random.choice(avail_pool)
         rating = random.choice(ratings)
         
@@ -248,7 +249,7 @@ tab1, tab2 = st.tabs(["🤖 1. Gemini LLM 기반 적합자 분석", "🚨 2. 예
 # ==========================================
 with tab1:
     st.subheader("🤖 Gemini LLM 인사 자력 지능형 추론")
-    st.write(f"현재 권한 관할 부대 DB 인원: **총 {len(df)}명**")
+    st.write("현재 권한 관할 부대 DB 인원: **총 {}명**".format(len(df)))
 
     user_prompt = st.text_input(
         "임무 요구사항 (자연어로 자유롭게 입력):",
@@ -283,13 +284,13 @@ with tab1:
                         target_df = filtered_candidates.head(15)
                         db_json = target_df[["소속부대", "성명", "계급", "병과", "보유자격증", "교육이수현황", "관련경력", "투입가용일", "최종평정"]].to_json(orient="records", force_ascii=False)
                         
-                        prompt_text = f"""
+                        prompt_text = """
                         너는 대한민국 육군 인사참모 AI 보조관이다.
-                        주어진 [부대 간부 1차 후보 DB]를 종합 분석해서 사용자의 [요구사항]에 가장 완벽히 부합하는 간부를 상위 {top_n}명 선발해라.
+                        주어진 [부대 간부 1차 후보 DB]를 종합 분석해서 사용자의 [요구사항]에 가장 완벽히 부합하는 간부를 상위 {top_n_val}명 선발해라.
                         자격증, 가용일, 병과, 경력, 평정 등을 종합 판단하여 자연스러운 군 인사 참모 문체로 추천 사유를 작성해라.
 
-                        [요구사항]: {user_prompt}
-                        [부대 간부 1차 후보 DB]: {db_json}
+                        [요구사항]: {user_req}
+                        [부대 간부 1차 후보 DB]: {db_data}
 
                         반드시 아래 JSON 배열 형식으로만 응답해라. 다른 설명 텍스트나 코드블록 표시는 생략해라.
                         [
@@ -301,7 +302,7 @@ with tab1:
                             "추천사유": "상세 추천 사유"
                           }}
                         ]
-                        """
+                        """.format(top_n_val=top_n, user_req=user_prompt, db_data=db_json)
                         
                         model = genai.GenerativeModel('gemini-3.6-flash')
                         response = model.generate_content(prompt_text)
@@ -309,24 +310,9 @@ with tab1:
                         clean_text = re.sub(r'```(?:json)?', '', response.text).strip()
                         results = json.loads(clean_text)
                         
-                        st.success(f"🎯 **Google Gemini AI가 최적격자 {len(results)}명을 도출했습니다.**")
+                        st.success("🎯 **Google Gemini AI가 최적격자 {}명을 도출했습니다.**".format(len(results)))
                         
                         for rank, item in enumerate(results, 1):
-                            html_parts = [
-                                '<div class="card-box">',
-                                f'<h4 style="margin:0; color:#1E3A8A;">🏅 {rank}순위 추천: [{item["소속부대"]}] {item["성명"]} {item["계급"]} (적합도 점수: {item["적합도점수"]}점)</h4>',
-                                '<p style="margin:8px 0 0 0; line-height:1.6;">',
-                                '🤖 <b>Gemini 참모 AI 판단 사유:</b><br>',
-                                f'<span style="color:#1D4ED8; font-weight:bold;">{item["추천사유"]}</span>',
-                                '</p>',
-                                '</div>'
-                            ]
-                            st.markdown("".join(html_parts), unsafe_allow_html=True)
-                            
-                    except Exception as e:
-                        st.error(f"❌ Gemini API 연동 오류 발생: {e}")
-                else:
-                    st.error("⚠️ Streamlit Secrets에 GEMINI_API_KEY가 설정되어 있지 않습니다.")
-
-    st.divider()
-    st.subheader(f"📋
+                            card_html = (
+                                '<div class="card-box">'
+                                '<h4 style="margin:0; color:#1E3A8A;">🏅 {
