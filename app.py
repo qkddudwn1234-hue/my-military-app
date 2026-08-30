@@ -312,7 +312,7 @@ with tab1:
                         st.success(f"🎯 **Google Gemini AI가 최적격자 {len(results)}명을 도출했습니다.**")
                         
                         for rank, item in enumerate(results, 1):
-                            html_content = (
-                                f'<div class="card-box">'
-                                f'<h4 style="margin:0; color:#1E3A8A;">🏅 {rank}순위 추천: [{item["소속부대"]}] {item["성명"]} {item["계급"]} (적합도 점수: {item["적합도점수"]}점)</h4>'
-                                f'<p style="margin:8px 0 0 0;
+                            st.markdown(
+                                '<div class="card-box">'
+                                '<h4 style="margin:0; color:#1E3A8A;">🏅 ' + str(rank) + '순위 추천: [' + str(item["소속부대"]) + '] ' + str(item["성명"]) + ' ' + str(item["계급"]) + ' (적합도 점수: ' + str(item["적합도점수"]) + '점)</h4>'
+                                '<p style="margin:8px 0 0 0; line-height:
