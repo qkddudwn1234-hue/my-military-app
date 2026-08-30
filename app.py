@@ -1,7 +1,9 @@
 import streamlit as st
 import pandas as pd
 import random
+import json
 from datetime import datetime, date, timedelta
+import google.generativeai as genai
 
 # 1. 페이지 레이아웃 및 기본 설정
 st.set_page_config(
@@ -104,28 +106,46 @@ if not st.session_state["logged_in"]:
 
 # --- 로그인 후 메인 화면 ---
 
-# 접속자 권한 및 소속 부대 확인
 current_user = USER_DB[st.session_state["username"]]
 
+# 사이드바 설정 (보안 차단 해제를 위해 직접 입력받는 방식으로 변경)
 with st.sidebar:
     st.write(f"👤 **접속자:** {current_user['name']}")
     st.write(f"🎖️ **소속:** {current_user['unit']}")
+    st.divider()
+    
+    st.subheader("🔑 Gemini LLM 연동 설정")
+    gemini_api_key = st.text_input(
+        "Google Gemini API Key 입력", 
+        type="password",
+        placeholder="aistudio.google.com에서 발급받은 키 입력"
+    )
+    if gemini_api_key:
+        try:
+            genai.configure(api_key=gemini_api_key)
+            st.caption("🟢 Gemini 1.5 Flash AI 연동 중")
+        except Exception as e:
+            st.caption("🔴 API 키 오류")
+    else:
+        st.caption("🟡 로그인 후 사이드바에 API 키를 입력하시면 진짜 LLM이 동작합니다.")
+            
+    st.divider()
     if st.button("🚪 로그아웃", type="secondary"):
         st.session_state["logged_in"] = False
         st.session_state["username"] = ""
         st.rerun()
 
-st.markdown(f'<div class="main-header">🎖️ [{current_user["unit"]}] 예하 부대 통합 인사 & 의무교육 대시보드</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="main-header">🤖 [{current_user["unit"]}] Gemini LLM 인사 & 의무교육 통합 관제</div>', unsafe_allow_html=True)
 
 # 4. 부대 지정 포함 100명 간부 DB 자동 생성
 @st.cache_data
 def generate_100_personnel():
     random.seed(42)
-    today = date(2026, 8, 29)
+    today = date(2026, 8, 30)
     
     units_pool = [
         "6여단 본부", "6여단 101대대", "6여단 102대대", "6여단 103대대", "6여단 포병대대",
-        "군수사 직할대", "작전사 본부"  # 상위/타 부대 예시
+        "군수사 직할대", "작전사 본부"
     ]
     
     last_names = ["김", "이", "박", "최", "정", "강", "조", "윤", "장", "임", "한", "오", "서", "신", "권", "황", "안", "송", "류", "홍"]
@@ -143,7 +163,7 @@ def generate_100_personnel():
         "자원관리교육(이수)", "보급기획과정(이수)", "안전관리교육(이수)", "지휘관과정(이수)"
     ]
     
-    avail_pool = ["즉시 가용", "2026-08-30", "2026-09-01", "2026-09-05", "2026-09-10", "임무 수행 중(불가)"]
+    avail_pool = ["즉시 가용", "2026-08-31", "2026-09-01", "2026-09-05", "2026-09-10", "임무 수행 중(불가)"]
     ratings = ["S", "A+", "A", "B+", "B"]
     mandatory_courses = ["자살예방교육", "성폭력 예방교육", "보안 및 정보보호교육", "군대윤리교육"]
     
@@ -155,11 +175,7 @@ def generate_100_personnel():
         rank = random.choice(ranks)
         branch = random.choice(branches)
         
-        # 6여단 예하 부대 위주 배정
-        if i <= 80:
-            assigned_unit = random.choice(units_pool[:5])
-        else:
-            assigned_unit = random.choice(units_pool[5:])
+        assigned_unit = random.choice(units_pool[:5]) if i <= 80 else random.choice(units_pool[5:])
             
         if i % 10 == 0:
             branch = "수송"
@@ -216,149 +232,81 @@ def generate_100_personnel():
 
 raw_df = generate_100_personnel()
 
-# --- 권한 기반 부대 데이터 필터링 로직 ---
+# 권한 기반 부대 데이터 필터링
 if current_user["accessible_units"] == ["ALL"]:
     df = raw_df.copy()
 else:
     df = raw_df[raw_df["소속부대"].isin(current_user["accessible_units"])].copy()
 
 # 5. 대시보드 탭 구성을 위한 렌더링
-tab1, tab2 = st.tabs(["🔍 1. 예하 부대 임무 적합자 추천", "🚨 2. 예하 부대 의무교육 관제 대시보드"])
+tab1, tab2 = st.tabs(["🤖 1. Gemini LLM 기반 적합자 심층 분석", "🚨 2. 예하 부대 의무교육 관제 대시보드"])
 
 # ==========================================
-# TAB 1: 예하 부대 임무 적합자 추천
+# TAB 1: Gemini LLM 기반 적합자 추론
 # ==========================================
 with tab1:
-    st.subheader("🔍 관할 부대 임무 요구사항 분석 및 추천")
-    st.write(f"현재 접속 권한 관할 부대: **{', '.join(current_user['accessible_units'] if current_user['accessible_units'] != ['ALL'] else ['전체 부대'])}** (총 {len(df)}명)")
+    st.subheader("🤖 Gemini 1.5 LLM 인사 자력 지능형 추론")
+    st.write(f"현재 관할 부대: **{', '.join(current_user['accessible_units'] if current_user['accessible_units'] != ['ALL'] else ['전체 부대'])}** (총 {len(df)}명)")
 
     user_prompt = st.text_input(
-        "요구사항 입력창:",
-        value="위험물 수송 및 관리 가능한 인원 추천해줘"
+        "임무 요구사항 (자연어로 자유롭게 입력):",
+        value="내일 바로 구난차 끌고 현장 출동할 수 있는 숙련된 간부 찾아줘"
     )
 
-    top_n = st.slider("최대 추출 인원 수 선택:", min_value=1, max_value=10, value=3)
+    top_n = st.slider("최대 추출 인원 수 선택:", min_value=1, max_value=5, value=3)
 
-    if st.button("🚀 DB 실시간 분석 및 조건 일치자 추출", type="primary"):
+    if st.button("🚀 Gemini LLM 실시간 분석 및 추천 실행", type="primary"):
         if not user_prompt.strip():
             st.warning("⚠️ 요구사항을 입력해 주세요.")
         else:
-            with st.spinner("AI가 예하 부대 대상 인원 자력을 검증 중입니다..."):
-                prompt_lower = user_prompt.lower()
-                
-                is_hazmat = any(w in prompt_lower for w in ["위험물", "유류", "탄약", "화약"])
-                is_logistics = any(w in prompt_lower for w in ["물류", "보급", "자원", "재정", "군수"])
-                is_safety = any(w in prompt_lower for w in ["안전", "통제", "관리관", "감독"])
-                is_tow = any(w in prompt_lower for w in ["구난차", "견인", "렉카", "구난"])
-                is_driving = any(w in prompt_lower for w in ["운전", "버스", "수송", "차량", "대형"]) and not is_tow
-                is_drone = any(w in prompt_lower for w in ["드론", "조교", "비행", "지도조종자", "교관"])
-                is_comm = any(w in prompt_lower for w in ["통신", "무선", "정보", "사이버", "전산"])
-                is_urgent = any(w in prompt_lower for w in ["내일", "즉시", "지금", "빠른", "오늘"])
-                
-                matched_results = []
-                
-                for idx, row in df.iterrows():
-                    score = 0
-                    reasons = []
-                    has_core_qualification = False
-                    
-                    if is_hazmat:
-                        if "위험물산업기사" in row["보유자격증"] or "위험물관리자" in row["보유자격증"]:
-                            score += 50
-                            reasons.append("위험물 산업기사/관리자 자격 보유")
-                            has_core_qualification = True
-                        if row["병과"] in ["병기", "보급"]:
-                            score += 15
-                            reasons.append("병기/보급 병과 전문 인원")
-
-                    elif is_logistics:
-                        if "물류관리사" in row["보유자격증"] or "자원관리사" in row["보유자격증"]:
-                            score += 40
-                            reasons.append("물류/자원 관리사 자격 보유")
-                            has_core_qualification = True
-                        if "보급기획과정(이수)" in row["교육이수현황"] or "군수재정교육(이수)" in row["교육이수현황"]:
-                            score += 20
-                            reasons.append("군수/보급 기획 전문교육 이수")
-                            has_core_qualification = True
-
-                    elif is_safety:
-                        if "안전관리교육(이수)" in row["교육이수현황"] or "수송안전교육(이수)" in row["교육이수현황"]:
-                            score += 45
-                            reasons.append("안전관리 전문교육 이수자")
-                            has_core_qualification = True
-
-                    elif is_tow:
-                        if "구난차운전면허" in row["보유자격증"] or "특수운전면허" in row["보유자격증"]:
-                            score += 50
-                            reasons.append("구난차/특수 운전면허 보유")
-                            has_core_qualification = True
-
-                    elif is_driving:
-                        if "대형운전면허" in row["보유자격증"] or "특수운전면허" in row["보유자격증"]:
-                            score += 40
-                            reasons.append("대형/특수 운전면허 보유")
-                            has_core_qualification = True
-                        elif row["병과"] == "수송":
-                            score += 20
-                            reasons.append("수송 병과 전문 인원")
-                            has_core_qualification = True
-
-                    elif is_drone:
-                        if "지도조종자" in row["보유자격증"]:
-                            score += 40
-                            reasons.append("지도조종자(교관) 자격증 보유")
-                            has_core_qualification = True
-                        elif "조종자" in row["보유자격증"]:
-                            score += 25
-                            reasons.append("드론 조종자 자격 보유")
-                            has_core_qualification = True
-
-                    elif is_comm:
-                        if row["병과"] in ["통신", "정보통신"]:
-                            score += 30
-                            reasons.append("통신/정보통신 병과")
-                            has_core_qualification = True
-
-                    if has_core_qualification:
-                        if is_urgent and row["투입가용일"] in ["즉시 가용", "2026-08-30"]:
-                            score += 15
-                            reasons.append("즉시/내일 투입 가능")
+            with st.spinner("🤖 Google Gemini 1.5 AI가 관할 부대 DB를 다각도로 분석 중입니다..."):
+                if gemini_api_key:
+                    try:
+                        db_json = df[["소속부대", "성명", "계급", "병과", "보유자격증", "교육이수현황", "관련경력", "투입가용일", "최종평정"]].to_json(orient="records", force_ascii=False)
                         
-                        if row["최종평정"] in ["S", "A+"]:
-                            score += 5
-                            reasons.append(f"우수 평정자({row['최종평정']})")
+                        prompt_text = f"""
+                        너는 대한민국 육군 인사참모 AI 보조관이다.
+                        주어진 [부대 간부 DB]를 종합적으로 분석해서 사용자의 [요구사항]에 가장 잘 부합하는 간부를 상위 {top_n}명 선발해라.
+                        자격증, 가용일, 병과, 관련경력, 최종평정 등을 종합 고려하여 자연스러운 군 인사 참모 문체로 추천 사유를 작성해라.
+
+                        [요구사항]: {user_prompt}
+                        [부대 간부 DB]: {db_json}
+
+                        반드시 아래 JSON 배열 형식으로만 응답해라. 텍스트 설명이나 코드블록 표시는 제거해라.
+                        [
+                          {{
+                            "성명": "이름",
+                            "계급": "계급",
+                            "소속부대": "부대명",
+                            "적합도점수": 95,
+                            "추천사유": "상세 추천 사유"
+                          }}
+                        ]
+                        """
                         
-                        matched_results.append({
-                            "info": row,
-                            "score": score + 50,
-                            "reasons": reasons
-                        })
-                
-                if not matched_results:
-                    st.error("⚠️ **관할 부대 내에 해당되는 자격자가 없습니다.**")
+                        model = genai.GenerativeModel('gemini-1.5-flash')
+                        response = model.generate_content(prompt_text)
+                        
+                        clean_json = response.text.replace("```json", "").replace("```", "").strip()
+                        results = json.loads(clean_json)
+                        
+                        st.success("🎯 **Google Gemini 1.5 AI가 문맥을 이해하고 최적격자를 도출했습니다.**")
+                        
+                        for rank, item in enumerate(results, 1):
+                            st.markdown(f"""
+                                <div class="card-box">
+                                    <h4 style="margin:0; color:#1E3A8A;">🏅 {rank}순위 추천: [{item['소속부대']}] {item['성명']} {item['계급']} (적합도 점수: {item['적합도점수']}점)</h4>
+                                    <p style="margin:8px 0 0 0; line-height:1.6;">
+                                    🤖 <b>Gemini 참모 AI 판단 사유:</b><br>
+                                    <span style="color:#1D4ED8; font-weight:bold;">{item['추천사유']}</span>
+                                    </p>
+                                </div>
+                            """, unsafe_allow_html=True)
+                            
+                    except Exception as e:
+                        st.error(f"❌ Gemini API 연동 오류 발생: {e}")
                 else:
-                    matched_results = sorted(matched_results, key=lambda x: x["score"], reverse=True)
-                    final_list = matched_results[:top_n]
-                    
-                    st.success(f"🎯 **관할 부대 인원 중 적합자 총 {len(matched_results)}명 중 상위 {len(final_list)}명을 추천합니다.**")
-                    
-                    for rank, item in enumerate(final_list, 1):
-                        person = item["info"]
-                        score = item["score"]
-                        reasons_str = " | ".join(item["reasons"])
-                        
-                        st.markdown(f"""
-                            <div class="card-box">
-                                <h4 style="margin:0; color:#1E3A8A;">🏅 {rank}순위: [{person['소속부대']}] {person['성명']} {person['계급']} ({score}점)</h4>
-                                <p style="margin:5px 0 0 0;">
-                                • <b>소속 / 군번 / 병과:</b> <span style="font-weight:bold; color:#1E3A8A;">{person['소속부대']}</span> / {person['군번']} / {person['병과']}<br>
-                                • <b>보유 자격:</b> <span style="color:#1D4ED8; font-weight:bold;">{person['보유자격증']}</span><br>
-                                • <b>교육 현황:</b> {person['교육이수현황']}<br>
-                                • <b>투입 가용일:</b> <span style="color:#DC2626; font-weight:bold;">{person['투입가용일']}</span> (최종평정: {person['최종평정']})<br>
-                                • <b>AI 추천 사유:</b> <span style="color:#1D4ED8; font-weight:bold;">{reasons_str}</span>
-                                </p>
-                            </div>
-                        """, unsafe_allow_html=True)
+                    st.info("💡 **[사용 안내]** 왼쪽 사이드바의 **`Google Gemini API Key 입력`** 칸에 발급받으신 API 키를 붙여넣으시면 진짜 Gemini LLM 분석이 구동됩니다.")
 
     st.divider()
     st.subheader("📋 관할 부대 간부 인사자력 현황")
@@ -372,7 +320,6 @@ with tab2:
     st.subheader("📢 관할 예하 부대별 필수 의무교육 미이수 관제")
     st.write(f"접속 권한: **[{current_user['unit']}]** 관할 예하 부대원들의 의무교육 마감일 및 미이수 현황입니다.")
     
-    # 1. 예하 부대 선택 세부 필터 (여단 실무자일 경우 예하 대대별 선택 가능)
     available_unit_options = ["관할 부대 전체"] + list(df["소속부대"].unique())
     selected_sub_unit = st.selectbox("📌 조회할 예하 부대 선택:", available_unit_options)
     
@@ -381,7 +328,6 @@ with tab2:
     else:
         edu_view_df = df.copy()
 
-    # 지표 계산
     uncompleted_df = edu_view_df[edu_view_df["이수상태"] == "미이수"]
     urgent_uncompleted = uncompleted_df[uncompleted_df["D_Day"] <= 7]
     completed_count = len(edu_view_df[edu_view_df["이수상태"] == "이수완료"])
@@ -399,7 +345,6 @@ with tab2:
         
     st.divider()
     
-    # 2. 마감 임박 미이수자 경고 (부대명 표시)
     st.subheader("🚨 마감 임박 / 초과 미이수자 (부대별 독려 대상)")
     
     if len(urgent_uncompleted) == 0:
@@ -423,7 +368,6 @@ with tab2:
 
     st.divider()
     
-    # 3. 부대별 검색 표
     st.subheader("📋 관할 부대 의무교육 상세 현황")
     
     col_f1, col_f2 = st.columns(2)
