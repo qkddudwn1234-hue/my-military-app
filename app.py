@@ -207,14 +207,14 @@ with tab1:
                         c_txt = re.sub(r"```(?:json)?", "", res.text).strip()
                         items = json.loads(c_txt)
 
-                        st.success(f"🎯 최적격자 {len(items)}명 심사 완료")
+                        st.success("🎯 최적격자 " + str(len(items)) + "명 심사 완료")
                         for r, it in enumerate(items, 1):
-                            t = f"🏅 {r}순위: [{it['소속부대']}] {it['성명']} {it['계급']} ({it['적합도점수']}점)"
+                            t = "🏅 " + str(r) + "순위: [" + str(it['소속부대']) + "] " + str(it['성명']) + " " + str(it['계급']) + " (" + str(it['적합도점수']) + "점)"
                             with st.expander(t, expanded=True):
                                 st.write("🤖 **판단 사유:**")
                                 st.info(it["추천사유"])
                     except Exception as e:
-                        st.error(f"연동 오류: {e}")
+                        st.error("연동 오류: " + str(e))
                 else:
                     st.error("API 키 설정이 필요합니다.")
 
@@ -237,10 +237,10 @@ with tab2:
     rate = round((comp / len(edf)) * 100, 1) if len(edf) > 0 else 0
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("👥 대상 인원", f"{len(edf)}명")
-    c2.metric("✅ 평균 이수율", f"{rate}%")
-    c3.metric("❌ 미이수 인원", f"{len(un_df)}명")
-    c4.metric("🚨 마감 임박(D-7)", f"{len(urg_df)}명")
+    c1.metric("👥 대상 인원", str(len(edf)) + "명")
+    c2.metric("✅ 평균 이수율", str(rate) + "%")
+    c3.metric("❌ 미이수 인원", str(len(un_df)) + "명")
+    c4.metric("🚨 마감 임박(D-7)", str(len(urg_df)) + "명")
 
     st.divider()
     st.subheader("🚨 독려 대상자 목록")
@@ -249,4 +249,28 @@ with tab2:
         st.success("🎉 마감 임박 미이수자가 없습니다.")
     else:
         for idx, row in urg_df.sort_values(by="D_Day").head(15).iterrows():
-            d_str = f"D-{row['D_Day']}일" if row["D_Day"] >= 0 else f"마감 {abs(row['D_Day'])}
+            if row["D_Day"] >= 0:
+                d_str = "D-" + str(row["D_Day"]) + "일"
+            else:
+                d_str = "마감 " + str(abs(row["D_Day"])) + "일 경과"
+            
+            err_msg = "⚠️ [" + str(row["소속부대"]) + "] " + str(row["성명"]) + " " + str(row["계급"]) + " | 과목: " + str(row["필수의무교육"]) + " | 마감: " + str(row["교육마감일"]) + " (" + d_str + ")"
+            st.error(err_msg)
+
+    st.divider()
+    st.subheader("📋 상세 현황 필터링")
+
+    f1, f2 = st.columns(2)
+    with f1:
+        c_sel = st.selectbox("과목 선택:", ["전체", "자살예방교육", "성폭력 예방교육", "보안 및 정보보호교육", "군대윤리교육"])
+    with f2:
+        s_sel = st.selectbox("이수 상태 선택:", ["전체", "미이수", "이수완료"])
+
+    fdf = edf.copy()
+    if c_sel != "전체":
+        fdf = fdf[fdf["필수의무교육"] == c_sel]
+    if s_sel != "전체":
+        fdf = fdf[fdf["이수상태"] == s_sel]
+
+    ec = ["소속부대", "군번", "성명", "계급", "병과", "필수의무교육", "이수상태", "교육마감일", "D_Day"]
+    st.dataframe(fdf[ec].sort_values(by=["이수상태", "D_Day"]), use_container_width=True, hide_index=True)
