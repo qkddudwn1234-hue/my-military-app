@@ -284,7 +284,7 @@ with tab1:
                         ]
                         """
                         
-                        model = genai.GenerativeModel('gemini-2.5-flash')
+                        model = genai.GenerativeModel('gemini-3.6-flash')
                         response = model.generate_content(prompt_text)
                         
                         clean_json = response.text.replace("```json", "").replace("```", "").strip()
