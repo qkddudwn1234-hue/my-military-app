@@ -6,7 +6,32 @@ import google.generativeai as genai
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(page_title="LLM Control System", layout="wide")
+st.set_page_config(
+    page_title="육군 인사 & 의무교육 통합 관제 시스템",
+    page_icon="🎖️",
+    layout="wide"
+)
+
+# 1. 시각적 디자인 강화를 위한 커스텀 CSS
+st.markdown("""
+<style>
+    .main-title {
+        font-size: 28px !important;
+        font-weight: 900 !important;
+        color: #1E3A8A;
+        border-bottom: 3px solid #1E3A8A;
+        padding-bottom: 10px;
+        margin-bottom: 20px;
+    }
+    .user-card {
+        background-color: #F1F5F9;
+        border-left: 5px solid #1E3A8A;
+        padding: 12px;
+        border-radius: 6px;
+        margin-bottom: 15px;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
@@ -48,21 +73,25 @@ USER_DB = {
     },
 }
 
+# --- 로그인 화면 UI ---
 if not st.session_state["logged_in"]:
-    st.title("로그인")
-    st.info("테스트 계정: 6bde / 101bn / HQ (비밀번호: 1234)")
+    st.image("https://img.icons8.com/color/96/military-shield.png", width=70)
+    st.markdown('<div class="main-title">🎖️ 대한민국 육군 인사 & 의무교육 관제 시스템</div>', unsafe_allow_html=True)
+    st.info("💡 테스트 로그인 계정: 6bde / 101bn / HQ (비밀번호: 1234)")
+    
     with st.form("login_form"):
-        u = st.text_input("아이디")
-        p = st.text_input("비밀번호", type="password")
+        u = st.text_input("아이디 (ID)")
+        p = st.text_input("비밀번호 (PW)", type="password")
         if st.form_submit_button("로그인", type="primary", use_container_width=True):
             if u in USER_DB and USER_DB[u]["password"] == p:
                 st.session_state["logged_in"] = True
                 st.session_state["username"] = u
                 st.rerun()
             else:
-                st.error("비밀번호가 올바르지 않습니다.")
+                st.error("❌ 아이디 또는 비밀번호가 올바르지 않습니다.")
     st.stop()
 
+# --- 로그인 후 메인 대시보드 ---
 current_user = USER_DB[st.session_state["username"]]
 
 gemini_api_key = ""
@@ -73,21 +102,37 @@ if "GEMINI_API_KEY" in st.secrets:
     except Exception:
         pass
 
+# 사이드바 프로필 영역 디자인
 with st.sidebar:
-    st.write("접속자:", current_user["name"])
-    st.write("소속:", current_user["unit"])
+    st.image("https://img.icons8.com/color/96/military-medal.png", width=60)
+    st.markdown("### 🎖️ 접속자 프로필")
+    st.markdown(
+        '<div class="user-card">'
+        '<b>성명:</b> ' + str(current_user["name"]) + '<br>'
+        '<b>소속:</b> ' + str(current_user["unit"]) +
+        '</div>',
+        unsafe_allow_html=True
+    )
     st.divider()
+    
+    st.markdown("### 🔑 AI 참모 연동")
     if gemini_api_key:
-        st.caption("Gemini AI 연동 완료")
+        st.success("🟢 Gemini 3.6 Flash 연동")
     else:
-        st.caption("Secrets 설정 필요")
+        st.warning("🔴 API Key 설정 필요")
+    
     st.divider()
-    if st.button("로그아웃"):
+    if st.button("🚪 시스템 로그아웃", type="secondary", use_container_width=True):
         st.session_state["logged_in"] = False
         st.session_state["username"] = ""
         st.rerun()
 
-st.title("[" + current_user["unit"] + "] 인사 및 의무교육 관제")
+# 상단 메인 헤더 (부대 마크 아이콘 포함)
+col_head1, col_head2 = st.columns([1, 12])
+with col_head1:
+    st.image("https://img.icons8.com/color/96/military-shield.png", width=60)
+with col_head2:
+    st.markdown('<div class="main-title">[' + str(current_user["unit"]) + '] Gemini LLM 인사 자력 & 의무교육 통합 관제 대시보드</div>', unsafe_allow_html=True)
 
 
 @st.cache_data
@@ -172,22 +217,24 @@ if current_user["accessible_units"] == ["ALL"]:
 else:
     df = raw_df[raw_df["소속부대"].isin(current_user["accessible_units"])].copy()
 
-tab1, tab2 = st.tabs(["적합자 분석", "의무교육 관제"])
+tab1, tab2 = st.tabs(["🤖 1. Gemini AI 적합자 분석", "🚨 2. 예하부대 의무교육 관제"])
 
+# TAB 1
 with tab1:
-    st.subheader("Gemini 인사 추론")
-    st.write("관할 인원: 총 " + str(len(df)) + "명")
+    st.subheader("🤖 Gemini 참모 AI 적합자 선발 분석")
+    st.write("📊 관할 권한 부대 관리 인원: **총 " + str(len(df)) + "명**")
 
     user_prompt = st.text_input(
-        "임무 요구사항:", value="내일 바로 구난차 끌고 출동할 수 있는 간부 찾아줘"
+        "💡 임무 요구사항 (자연어로 자유롭게 입력):",
+        value="내일 바로 구난차 끌고 출동할 수 있는 숙련된 간부 찾아줘"
     )
-    top_n = st.slider("추출 인원 수:", min_value=1, max_value=5, value=3)
+    top_n = st.slider("🎯 추출할 최적격자 수:", min_value=1, max_value=5, value=3)
 
-    if st.button("분석 실행", type="primary"):
+    if st.button("🚀 Gemini AI 분석 및 추천 실행", type="primary"):
         if not user_prompt.strip():
             st.warning("요구사항을 입력하세요.")
         else:
-            with st.spinner("Gemini AI 심사 중..."):
+            with st.spinner("🤖 Gemini 참모 AI가 DB를 정밀 분석 중입니다..."):
                 if gemini_api_key:
                     try:
                         kw = [
@@ -238,21 +285,23 @@ with tab1:
                         c_txt = re.sub(r"```(?:json)?", "", res.text).strip()
                         items = json.loads(c_txt)
 
-                        st.success("최적격자 " + str(len(items)) + "명 도출")
+                        st.success("🎯 최적격자 " + str(len(items)) + "명 심사 완료")
                         for r, it in enumerate(items, 1):
                             t = (
-                                str(r)
+                                "🏅 "
+                                + str(r)
                                 + "순위: ["
                                 + str(it["소속부대"])
                                 + "] "
                                 + str(it["성명"])
                                 + " "
                                 + str(it["계급"])
-                                + " ("
+                                + " (적합도: "
                                 + str(it["적합도점수"])
                                 + "점)"
                             )
                             with st.expander(t, expanded=True):
+                                st.write("🤖 **Gemini 참모 AI 판단 사유:**")
                                 st.info(it["추천사유"])
                     except Exception as e:
                         st.error("연동 오류: " + str(e))
@@ -260,6 +309,7 @@ with tab1:
                     st.error("API 키 설정이 필요합니다.")
 
     st.divider()
+    st.subheader("📋 관할 부대 간부 인사자력 현황")
     d_cols = [
         "소속부대",
         "군번",
@@ -274,47 +324,48 @@ with tab1:
     ]
     st.dataframe(df[d_cols], use_container_width=True, hide_index=True)
 
+# TAB 2
 with tab2:
-    st.subheader("의무교육 관제")
-    st.write("접속 권한: [" + current_user["unit"] + "]")
+    st.subheader("📢 예하 부대 필수 의무교육 이수 관제")
+    st.write("접속 권한: **[" + str(current_user["unit"]) + "]**")
 
-    u_opts = ["전체"] + list(df["소속부대"].unique())
-    sel_u = st.selectbox("부대 선택:", u_opts)
+    u_opts = ["관할 부대 전체"] + list(df["소속부대"].unique())
+    sel_u = st.selectbox("📌 조회 부대 선택:", u_opts)
 
-    edf = df if sel_u == "전체" else df[df["소속부대"] == sel_u].copy()
+    edf = df if sel_u == "관할 부대 전체" else df[df["소속부대"] == sel_u].copy()
     un_df = edf[edf["이수상태"] == "미이수"]
     urg_df = un_df[un_df["D_Day"] <= 7]
     comp = len(edf[edf["이수상태"] == "이수완료"])
     rate = round((comp / len(edf)) * 100, 1) if len(edf) > 0 else 0
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("대상", str(len(edf)) + "명")
-    c2.metric("이수율", str(rate) + "%")
-    c3.metric("미이수", str(len(un_df)) + "명")
-    c4.metric("마감임박", str(len(urg_df)) + "명")
+    c1.metric("👥 관할 대상 인원", str(len(edf)) + "명")
+    c2.metric("✅ 평균 이수율", str(rate) + "%")
+    c3.metric("❌ 미이수 인원", str(len(un_df)) + "명")
+    c4.metric("🚨 마감 임박 (D-7)", str(len(urg_df)) + "명")
 
     st.divider()
-    st.subheader("독려 대상자")
+    st.subheader("🚨 마감 임박 / 초과 미이수자 (독려 대상)")
 
     if len(urg_df) == 0:
-        st.success("마감 임박 인원이 없습니다.")
+        st.success("🎉 마감 임박 미이수자가 없습니다.")
     else:
         for idx, row in urg_df.sort_values(by="D_Day").head(15).iterrows():
             d_str = (
-                "D-" + str(row["D_Day"])
+                "D-" + str(row["D_Day"]) + "일"
                 if row["D_Day"] >= 0
-                else "초과 " + str(abs(row["D_Day"])) + "일"
+                else "마감 " + str(abs(row["D_Day"])) + "일 경과"
             )
             msg = (
-                "["
+                "⚠️ ["
                 + str(row["소속부대"])
                 + "] "
                 + str(row["성명"])
                 + " "
                 + str(row["계급"])
-                + " | "
+                + " | 과목: "
                 + str(row["필수의무교육"])
-                + " | "
+                + " | 마감일: "
                 + str(row["교육마감일"])
                 + " ("
                 + d_str
@@ -323,12 +374,12 @@ with tab2:
             st.error(msg)
 
     st.divider()
-    st.subheader("상세 현황")
+    st.subheader("📋 상세 현황 필터링")
 
     f1, f2 = st.columns(2)
     with f1:
         c_sel = st.selectbox(
-            "과목:",
+            "과목 선택:",
             [
                 "전체",
                 "자살예방교육",
@@ -338,7 +389,7 @@ with tab2:
             ],
         )
     with f2:
-        s_sel = st.selectbox("상태:", ["전체", "미이수", "이수완료"])
+        s_sel = st.selectbox("이수 상태 선택:", ["전체", "미이수", "이수완료"])
 
     fdf = edf.copy()
     if c_sel != "전체":
