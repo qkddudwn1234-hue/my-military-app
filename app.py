@@ -7,16 +7,16 @@ import pandas as pd
 import streamlit as st
 
 st.set_page_config(
-    page_title="육군 인사 & 의무교육 통합 관제 시스템",
+    page_title="육군 인사 & 의무교육 관제 시스템",
     page_icon="🎖️",
     layout="wide"
 )
 
-# 1. 시각적 디자인 강화를 위한 커스텀 CSS
+# 커스텀 CSS 디자인
 st.markdown("""
 <style>
     .main-title {
-        font-size: 28px !important;
+        font-size: 26px !important;
         font-weight: 900 !important;
         color: #1E3A8A;
         border-bottom: 3px solid #1E3A8A;
@@ -75,8 +75,7 @@ USER_DB = {
 
 # --- 로그인 화면 UI ---
 if not st.session_state["logged_in"]:
-    st.image("https://img.icons8.com/color/96/military-shield.png", width=70)
-    st.markdown('<div class="main-title">🎖️ 대한민국 육군 인사 & 의무교육 관제 시스템</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-title">🛡️ 대한민국 육군 인사 & 의무교육 관제 시스템</div>', unsafe_allow_html=True)
     st.info("💡 테스트 로그인 계정: 6bde / 101bn / HQ (비밀번호: 1234)")
     
     with st.form("login_form"):
@@ -102,9 +101,8 @@ if "GEMINI_API_KEY" in st.secrets:
     except Exception:
         pass
 
-# 사이드바 프로필 영역 디자인
+# 사이드바 프로필 영역
 with st.sidebar:
-    st.image("https://img.icons8.com/color/96/military-medal.png", width=60)
     st.markdown("### 🎖️ 접속자 프로필")
     st.markdown(
         '<div class="user-card">'
@@ -127,12 +125,8 @@ with st.sidebar:
         st.session_state["username"] = ""
         st.rerun()
 
-# 상단 메인 헤더 (부대 마크 아이콘 포함)
-col_head1, col_head2 = st.columns([1, 12])
-with col_head1:
-    st.image("https://img.icons8.com/color/96/military-shield.png", width=60)
-with col_head2:
-    st.markdown('<div class="main-title">[' + str(current_user["unit"]) + '] Gemini LLM 인사 자력 & 의무교육 통합 관제 대시보드</div>', unsafe_allow_html=True)
+# 상단 메인 헤더
+st.markdown('<div class="main-title">🛡️ [' + str(current_user["unit"]) + '] Gemini LLM 인사 자력 & 의무교육 관제 시스템</div>', unsafe_allow_html=True)
 
 
 @st.cache_data
@@ -348,68 +342,4 @@ with tab2:
     st.subheader("🚨 마감 임박 / 초과 미이수자 (독려 대상)")
 
     if len(urg_df) == 0:
-        st.success("🎉 마감 임박 미이수자가 없습니다.")
-    else:
-        for idx, row in urg_df.sort_values(by="D_Day").head(15).iterrows():
-            d_str = (
-                "D-" + str(row["D_Day"]) + "일"
-                if row["D_Day"] >= 0
-                else "마감 " + str(abs(row["D_Day"])) + "일 경과"
-            )
-            msg = (
-                "⚠️ ["
-                + str(row["소속부대"])
-                + "] "
-                + str(row["성명"])
-                + " "
-                + str(row["계급"])
-                + " | 과목: "
-                + str(row["필수의무교육"])
-                + " | 마감일: "
-                + str(row["교육마감일"])
-                + " ("
-                + d_str
-                + ")"
-            )
-            st.error(msg)
-
-    st.divider()
-    st.subheader("📋 상세 현황 필터링")
-
-    f1, f2 = st.columns(2)
-    with f1:
-        c_sel = st.selectbox(
-            "과목 선택:",
-            [
-                "전체",
-                "자살예방교육",
-                "성폭력 예방교육",
-                "보안 및 정보보호교육",
-                "군대윤리교육",
-            ],
-        )
-    with f2:
-        s_sel = st.selectbox("이수 상태 선택:", ["전체", "미이수", "이수완료"])
-
-    fdf = edf.copy()
-    if c_sel != "전체":
-        fdf = fdf[fdf["필수의무교육"] == c_sel]
-    if s_sel != "전체":
-        fdf = fdf[fdf["이수상태"] == s_sel]
-
-    ec = [
-        "소속부대",
-        "군번",
-        "성명",
-        "계급",
-        "병과",
-        "필수의무교육",
-        "이수상태",
-        "교육마감일",
-        "D_Day",
-    ]
-    st.dataframe(
-        fdf[ec].sort_values(by=["이수상태", "D_Day"]),
-        use_container_width=True,
-        hide_index=True,
-    )
+        st.success("🎉 마감
