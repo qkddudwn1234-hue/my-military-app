@@ -265,42 +265,4 @@ with tab1:
                                 st.info(item["추천사유"])
                             
                     except Exception as e:
-                        st.error("❌ 연동 오류: " + str(e))
-                else:
-                    st.error("⚠️ GEMINI_API_KEY 설정이 필요합니다.")
-
-    st.divider()
-    st.subheader("📋 인사자력 현황 (총 " + str(len(df)) + "명)")
-    disp_cols = [
-        "소속부대", "군번", "성명", "계급", "병과",
-        "보유자격증", "교육이수현황", "관련경력", "투입가용일", "최종평정"
-    ]
-    st.dataframe(df[disp_cols], use_container_width=True, hide_index=True)
-
-with tab2:
-    st.subheader("📢 예하 부대 필수 의무교육 관제")
-    st.write("접속 권한: **[" + current_user["unit"] + "]**")
-    
-    unit_opts = ["관할 부대 전체"] + list(df["소속부대"].unique())
-    selected_sub_unit = st.selectbox("📌 조회 부대 선택:", unit_opts)
-    
-    if selected_sub_unit != "관할 부대 전체":
-        edu_view_df = df[df["소속부대"] == selected_sub_unit].copy()
-    else:
-        edu_view_df = df.copy()
-
-    uncompleted_df = edu_view_df[edu_view_df["이수상태"] == "미이수"]
-    urgent_uncompleted = uncompleted_df[uncompleted_df["D_Day"] <= 7]
-    completed_count = len(edu_view_df[edu_view_df["이수상태"] == "이수완료"])
-    
-    if len(edu_view_df) > 0:
-        completion_rate = round((completed_count / len(edu_view_df)) * 100, 1)
-    else:
-        completion_rate = 0
-    
-    col_e1, col_e2, col_e3, col_e4 = st.columns(4)
-    with col_e1:
-        st.metric(label="👥 관할 대상", value=str(len(edu_view_df)) + "명")
-    with col_e2:
-        st.metric(label="✅ 이수율", value=str(completion_rate) + "%")
-    with col
+                        st.error("
