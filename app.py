@@ -272,7 +272,10 @@ with tab1:
                         st.success("🎯 Google Gemini AI가 최적격자 {}명을 도출했습니다.".format(len(results)))
                         
                         for rank, item in enumerate(results, 1):
-                            with st.expander("🏅 {}순위 추천: [{}] {} {} (적합도: {}점)".format(rank, item["소속부대"], item["성명"], item["계급"], item["적합도점수"]), expanded=True):
+                            title_text = "🏅 {}순위 추천: [{}] {} {} (적합도: {}점)".format(
+                                rank, item["소속부대"], item["성명"], item["계급"], item["적합도점수"]
+                            )
+                            with st.expander(title_text, expanded=True):
                                 st.write("🤖 **Gemini 참모 AI 판단 사유:**")
                                 st.info(item["추천사유"])
                             
@@ -299,16 +302,4 @@ with tab2:
     if selected_sub_unit != "관할 부대 전체":
         edu_view_df = df[df["소속부대"] == selected_sub_unit].copy()
     else:
-        edu_view_df = df.copy()
-
-    uncompleted_df = edu_view_df[edu_view_df["이수상태"] == "미이수"]
-    urgent_uncompleted = uncompleted_df[uncompleted_df["D_Day"] <= 7]
-    completed_count = len(edu_view_df[edu_view_df["이수상태"] == "이수완료"])
-    completion_rate = round((completed_count / len(edu_view_df)) * 100, 1) if len(edu_view_df) > 0 else 0
-    
-    col_e1, col_e2, col_e3, col_e4 = st.columns(4)
-    with col_e1:
-        st.metric(label="👥 관할 대상 인원", value="{}명".format(len(edu_view_df)))
-    with col_e2:
-        st.metric(label="✅ 평균 교육 이수율", value="{}%".format(completion_rate))
-    with col_e3:
+        edu_view_df = df.
