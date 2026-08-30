@@ -249,14 +249,4 @@ with tab2:
         st.success("🎉 마감 임박 미이수자가 없습니다.")
     else:
         for idx, row in urg_df.sort_values(by="D_Day").head(15).iterrows():
-            d_str = f"D-{row['D_Day']}일" if row["D_Day"] >= 0 else f"마감 {abs(row['D_Day'])}일 경과"
-            st.error(f"⚠️ [{row['소속부대']}] {row['성명']} {row['계급']} | 과목: {row['필수의무교육']} | 마감: {row['교육마감일']} ({d_str})")
-
-    st.divider()
-    st.subheader("📋 상세 현황 필터링")
-
-    f1, f2 = st.columns(2)
-    with f1:
-        c_sel = st.selectbox("과목 선택:", ["전체", "자살예방교육", "성폭력 예방교육", "보안 및 정보보호교육", "군대윤리교육"])
-    with f2:
-        s_sel
+            d_str = f"D-{row['D_Day']}일" if row["D_Day"] >= 0 else f"마감 {abs(row['D_Day'])}
