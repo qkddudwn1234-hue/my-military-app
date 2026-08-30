@@ -1,13 +1,12 @@
 import json
 import random
 import re
-from datetime import date, datetime, timedelta
-
+from datetime import date, timedelta
 import google.generativeai as genai
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(page_title="LLM 관제 시스템", page_icon="🎖️", layout="wide")
+st.set_page_config(page_title="LLM Control System", layout="wide")
 
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
@@ -50,20 +49,18 @@ USER_DB = {
 }
 
 if not st.session_state["logged_in"]:
-    st.title("🔒 로그인")
-    st.info("💡 계정: 6bde / 101bn / HQ (비번: 1234)")
+    st.title("로그인")
+    st.info("테스트 계정: 6bde / 101bn / HQ (비밀번호: 1234)")
     with st.form("login_form"):
         u = st.text_input("아이디")
         p = st.text_input("비밀번호", type="password")
-        if st.form_submit_button(
-            "로그인", type="primary", use_container_width=True
-        ):
+        if st.form_submit_button("로그인", type="primary", use_container_width=True):
             if u in USER_DB and USER_DB[u]["password"] == p:
                 st.session_state["logged_in"] = True
                 st.session_state["username"] = u
                 st.rerun()
             else:
-                st.error("❌ 비밀번호 오류")
+                st.error("비밀번호가 올바르지 않습니다.")
     st.stop()
 
 current_user = USER_DB[st.session_state["username"]]
@@ -77,20 +74,20 @@ if "GEMINI_API_KEY" in st.secrets:
         pass
 
 with st.sidebar:
-    st.write("👤", current_user["name"])
-    st.write("🎖️", current_user["unit"])
+    st.write("접속자:", current_user["name"])
+    st.write("소속:", current_user["unit"])
     st.divider()
     if gemini_api_key:
-        st.caption("🟢 Gemini AI 연동됨")
+        st.caption("Gemini AI 연동 완료")
     else:
-        st.caption("🔴 Secrets 설정 필요")
+        st.caption("Secrets 설정 필요")
     st.divider()
-    if st.button("🚪 로그아웃"):
+    if st.button("로그아웃"):
         st.session_state["logged_in"] = False
         st.session_state["username"] = ""
         st.rerun()
 
-st.title("🤖 [" + current_user["unit"] + "] LLM 관제")
+st.title("[" + current_user["unit"] + "] 인사 및 의무교육 관제")
 
 
 @st.cache_data
@@ -109,37 +106,17 @@ def generate_personnel_db():
         "6여단 수송대대",
         "6여단 정비대대",
     ]
-    u_oth = [
-        "군수사령부 직할대",
-        "작전사령부 본부",
-        "1군단 사령부",
-        "5사단 본부",
-    ]
+    u_oth = ["군수사령부 직할대", "작전사령부 본부", "1군단 사령부", "5사단 본부"]
 
     ln = ["김", "이", "박", "최", "정", "강", "조", "윤"]
     fn = ["민준", "서준", "도현", "우진", "지후", "하준"]
     rk = ["하사", "중사", "상사", "원사", "소위", "중위", "대위"]
     br = ["통신", "병기", "수송", "보급", "보병", "포병"]
-    cp = [
-        "대형운전면허",
-        "특수운전면허",
-        "구난차운전면허",
-        "정보처리기사",
-        "없음",
-    ]
-    ep = [
-        "수송안전교육(이수)",
-        "구난차량운용교육(이수)",
-        "안전관리교육(이수)",
-    ]
+    cp = ["대형운전면허", "특수운전면허", "구난차운전면허", "정보처리기사", "없음"]
+    ep = ["수송안전교육(이수)", "구난차량운용교육(이수)", "안전관리교육(이수)"]
     ap = ["즉시 가용", "2026-08-31", "임무 수행 중"]
     rt = ["S", "A+", "A", "B+", "B"]
-    cs = [
-        "자살예방교육",
-        "성폭력 예방교육",
-        "보안 및 정보보호교육",
-        "군대윤리교육",
-    ]
+    cs = ["자살예방교육", "성폭력 예방교육", "보안 및 정보보호교육", "군대윤리교육"]
 
     data = []
     for i in range(1, 301):
@@ -161,9 +138,7 @@ def generate_personnel_db():
         avail = random.choice(ap)
         rating = random.choice(rt)
         course = random.choice(cs)
-        status = random.choices(["이수완료", "미이수"], weights=[0.7, 0.3])[
-            0
-        ]
+        status = random.choices(["이수완료", "미이수"], weights=[0.7, 0.3])[0]
 
         days = random.choice([-3, -1, 2, 4, 6, 10, 18, 25])
         due = today + timedelta(days=days)
@@ -195,23 +170,20 @@ raw_df = generate_personnel_db()
 if current_user["accessible_units"] == ["ALL"]:
     df = raw_df.copy()
 else:
-    df = raw_df[
-        raw_df["소속부대"].isin(current_user["accessible_units"])
-    ].copy()
+    df = raw_df[raw_df["소속부대"].isin(current_user["accessible_units"])].copy()
 
-tab1, tab2 = st.tabs(["🤖 적합자 분석", "🚨 의무교육 관제"])
+tab1, tab2 = st.tabs(["적합자 분석", "의무교육 관제"])
 
 with tab1:
-    st.subheader("🤖 Gemini 인사 추론")
-    st.write("관할 인원: **총 " + str(len(df)) + "명**")
+    st.subheader("Gemini 인사 추론")
+    st.write("관할 인원: 총 " + str(len(df)) + "명")
 
     user_prompt = st.text_input(
-        "임무 요구사항:",
-        value="내일 바로 구난차 끌고 출동할 수 있는 간부 찾아줘",
+        "임무 요구사항:", value="내일 바로 구난차 끌고 출동할 수 있는 간부 찾아줘"
     )
     top_n = st.slider("추출 인원 수:", min_value=1, max_value=5, value=3)
 
-    if st.button("🚀 분석 실행", type="primary"):
+    if st.button("분석 실행", type="primary"):
         if not user_prompt.strip():
             st.warning("요구사항을 입력하세요.")
         else:
@@ -220,26 +192,15 @@ with tab1:
                     try:
                         kw = [
                             w
-                            for w in [
-                                "구난",
-                                "운전",
-                                "드론",
-                                "통신",
-                                "위험물",,
-                                "보급",
-                            ]
+                            for w in ["구난", "운전", "드론", "통신", "위험물", "보급"]
                             if w in user_prompt.lower()
                         ]
 
                         if kw:
                             pat = "|".join(kw)
                             fc = df[
-                                df["보유자격증"].str.contains(
-                                    pat, na=False
-                                )
-                                | df["교육이수현황"].str.contains(
-                                    pat, na=False
-                                )
+                                df["보유자격증"].str.contains(pat, na=False)
+                                | df["교육이수현황"].str.contains(pat, na=False)
                                 | df["병과"].str.contains(pat, na=False)
                             ]
                             if len(fc) < 5:
@@ -277,13 +238,10 @@ with tab1:
                         c_txt = re.sub(r"```(?:json)?", "", res.text).strip()
                         items = json.loads(c_txt)
 
-                        st.success(
-                            "🎯 최적격자 " + str(len(items)) + "명 도출"
-                        )
+                        st.success("최적격자 " + str(len(items)) + "명 도출")
                         for r, it in enumerate(items, 1):
                             t = (
-                                "🏅 "
-                                + str(r)
+                                str(r)
                                 + "순위: ["
                                 + str(it["소속부대"])
                                 + "] "
@@ -317,4 +275,90 @@ with tab1:
     st.dataframe(df[d_cols], use_container_width=True, hide_index=True)
 
 with tab2:
-    st.subheader("📢
+    st.subheader("의무교육 관제")
+    st.write("접속 권한: [" + current_user["unit"] + "]")
+
+    u_opts = ["전체"] + list(df["소속부대"].unique())
+    sel_u = st.selectbox("부대 선택:", u_opts)
+
+    edf = df if sel_u == "전체" else df[df["소속부대"] == sel_u].copy()
+    un_df = edf[edf["이수상태"] == "미이수"]
+    urg_df = un_df[un_df["D_Day"] <= 7]
+    comp = len(edf[edf["이수상태"] == "이수완료"])
+    rate = round((comp / len(edf)) * 100, 1) if len(edf) > 0 else 0
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("대상", str(len(edf)) + "명")
+    c2.metric("이수율", str(rate) + "%")
+    c3.metric("미이수", str(len(un_df)) + "명")
+    c4.metric("마감임박", str(len(urg_df)) + "명")
+
+    st.divider()
+    st.subheader("독려 대상자")
+
+    if len(urg_df) == 0:
+        st.success("마감 임박 인원이 없습니다.")
+    else:
+        for idx, row in urg_df.sort_values(by="D_Day").head(15).iterrows():
+            d_str = (
+                "D-" + str(row["D_Day"])
+                if row["D_Day"] >= 0
+                else "초과 " + str(abs(row["D_Day"])) + "일"
+            )
+            msg = (
+                "["
+                + str(row["소속부대"])
+                + "] "
+                + str(row["성명"])
+                + " "
+                + str(row["계급"])
+                + " | "
+                + str(row["필수의무교육"])
+                + " | "
+                + str(row["교육마감일"])
+                + " ("
+                + d_str
+                + ")"
+            )
+            st.error(msg)
+
+    st.divider()
+    st.subheader("상세 현황")
+
+    f1, f2 = st.columns(2)
+    with f1:
+        c_sel = st.selectbox(
+            "과목:",
+            [
+                "전체",
+                "자살예방교육",
+                "성폭력 예방교육",
+                "보안 및 정보보호교육",
+                "군대윤리교육",
+            ],
+        )
+    with f2:
+        s_sel = st.selectbox("상태:", ["전체", "미이수", "이수완료"])
+
+    fdf = edf.copy()
+    if c_sel != "전체":
+        fdf = fdf[fdf["필수의무교육"] == c_sel]
+    if s_sel != "전체":
+        fdf = fdf[fdf["이수상태"] == s_sel]
+
+    ec = [
+        "소속부대",
+        "군번",
+        "성명",
+        "계급",
+        "병과",
+        "필수의무교육",
+        "이수상태",
+        "교육마감일",
+        "D_Day",
+    ]
+    st.dataframe(
+        fdf[ec].sort_values(by=["이수상태", "D_Day"]),
+        use_container_width=True,
+        hide_index=True,
+    )
