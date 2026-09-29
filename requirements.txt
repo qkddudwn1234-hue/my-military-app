@@ -1,4 +1,6 @@
+Plaintext
 streamlit
 pandas
-google-generativeai
+numpy
+openpyxl
 plotly
