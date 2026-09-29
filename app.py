@@ -1,367 +1,109 @@
-import json
-import random
-import re
-from datetime import date, timedelta
-import google.generativeai as genai
-import pandas as pd
 import streamlit as st
+import pandas as pd
+import numpy as np
+import datetime
 
-st.set_page_config(page_title="육군 인사 및 의무교육 관제 시스템", layout="wide")
+# 1. 페이지 설정 (와이드 레이아웃, 다크 테마)
+st.set_page_config(page_title="AI 군 인력정보 플랫폼", layout="wide", initial_sidebar_state="expanded")
 
-if "logged_in" not in st.session_state:
-    st.session_state["logged_in"] = False
-if "username" not in st.session_state:
-    st.session_state["username"] = ""
+st.markdown("""
+    <style>
+    .stApp { background-color: #0E1117; color: #FFFFFF; }
+    div[data-testid="metric-container"] { background-color: #1E2130; border: 1px solid #2B3040; padding: 15px; border-radius: 10px; }
+    .main-header { font-size: 28px; font-weight: bold; color: #4DA8DA; border-bottom: 2px solid #2B3040; padding-bottom: 10px; margin-bottom: 20px;}
+    </style>
+""", unsafe_allow_html=True)
 
-if "title_color" not in st.session_state:
-    st.session_state["title_color"] = "#1E3A8A"
-if "header_color" not in st.session_state:
-    st.session_state["header_color"] = "#0F172A"
-if "accent_color" not in st.session_state:
-    st.session_state["accent_color"] = "#2563EB"
-if "bg_color" not in st.session_state:
-    st.session_state["bg_color"] = "#F8FAFC"
-if "chart_type" not in st.session_state:
-    st.session_state["chart_type"] = "막대 차트"
-if "unit_icon" not in st.session_state:
-    st.session_state["unit_icon"] = "🛡️"
-if "title_align" not in st.session_state:
-    st.session_state["title_align"] = "left"
-if "custom_title" not in st.session_state:
-    st.session_state["custom_title"] = "LLM 인사 자력 및 의무교육 관제"
-
-st.markdown(
-    '<style>'
-    'body, .stApp { background-color: ' + str(st.session_state["bg_color"]) + ' !important; }'
-    '.main-title {'
-    '    font-size: 24px !important;'
-    '    font-weight: 900 !important;'
-    '    color: ' + str(st.session_state["title_color"]) + ';'
-    '    text-align: ' + str(st.session_state["title_align"]) + ';'
-    '    border-bottom: 3px solid ' + str(st.session_state["title_color"]) + ';'
-    '    padding-bottom: 8px;'
-    '    margin-bottom: 15px;'
-    '}'
-    'h2, h3, h4 {'
-    '    color: ' + str(st.session_state["header_color"]) + ' !important;'
-    '}'
-    '.accent-text {'
-    '    color: ' + str(st.session_state["accent_color"]) + ' !important;'
-    '    font-weight: bold;'
-    '}'
-    '</style>',
-    unsafe_allow_html=True
-)
-
-USER_DB = {
-    "admin": {
-        "password": "1234",
-        "name": "최고관리자",
-        "unit": "국방부/합참",
-        "role": "ADMIN",
-        "accessible_units": ["ALL"]
-    },
-    "6bde": {
-        "password": "1234",
-        "name": "김지휘 대위 (6여단)",
-        "unit": "6여단",
-        "role": "USER",
-        "accessible_units": [
-            "6여단 본부", "6여단 101대대 본부", "6여단 101대대 1중대", 
-            "6여단 101대대 2중대", "6여단 102대대", "6여단 103대대", 
-            "6여단 포병대대", "6여단 수송대대", "6여단 정비대대"
-        ]
-    },
-    "101bn": {
-        "password": "1234",
-        "name": "강우진 중사 (101대대)",
-        "unit": "6여단 101대대",
-        "role": "USER",
-        "accessible_units": [
-            "6여단 101대대 본부", "6여단 101대대 1중대", "6여단 101대대 2중대"
-        ]
-    },
-    "HQ": {
-        "password": "1234",
-        "name": "박군수 소령 (상급부대)",
-        "unit": "군수사령부",
-        "role": "USER",
-        "accessible_units": ["ALL"]
-    }
-}
-
-if not st.session_state["logged_in"]:
-    st.markdown('<div class="main-title">🛡️ 대한민국 육군 관제 시스템</div>', unsafe_allow_html=True)
-    st.info("💡 계정 정보: 6여단 (`6bde`) | 101대대 (`101bn`) | 상급부대 (`HQ`) - 비번: `1234`")
-    
-    with st.form("login_form"):
-        u = st.text_input("아이디")
-        p = st.text_input("비밀번호", type="password")
-        if st.form_submit_button("로그인", type="primary", use_container_width=True):
-            if u in USER_DB and USER_DB[u]["password"] == p:
-                st.session_state["logged_in"] = True
-                st.session_state["username"] = u
-                st.rerun()
-            else:
-                st.error("❌ 비밀번호가 올바르지 않습니다.")
-    st.stop()
-
-current_user = USER_DB[st.session_state["username"]]
-
-gemini_api_key = ""
-if "GEMINI_API_KEY" in st.secrets:
-    gemini_api_key = st.secrets["GEMINI_API_KEY"]
-    try:
-        genai.configure(api_key=gemini_api_key)
-    except Exception:
-        pass
-
+# 2. 사이드바: 데이터 업로드 및 작전 기준일자 설정 (동적 피로도 계산의 핵심!)
 with st.sidebar:
-    st.markdown("### " + str(st.session_state["unit_icon"]) + " 접속 프로필")
-    st.write("성명:", current_user["name"])
-    st.write("소속:", current_user["unit"])
-    st.divider()
+    st.header("📂 시스템 연동 설정")
+    uploaded_file = st.file_uploader("여단급 인원DB 및 당직표 엑셀 업로드", type=['xlsx'])
     
-    st.markdown("### 🔑 AI 참모 연동")
-    if gemini_api_key:
-        st.success("🟢 Gemini AI 연동")
-    else:
-        st.warning("🔴 API Key 필요")
-    st.divider()
+    st.markdown("---")
+    st.subheader("🎯 작전 통제 기준")
+    # 실무자가 날짜를 지정하면 해당 날짜 기준으로 피로도가 동적 계산됨
+    target_date = st.date_input("작전 기준일자 선택", datetime.date(2026, 9, 26))
+    st.info("💡 지정된 날짜로부터 직전 7일간의 당직 이력을 역산하여 실시간 피로도를 산출합니다.")
 
-    if current_user.get("role") == "ADMIN":
-        st.markdown("### 🎨 Admin 커스텀")
-        c_title_color = st.color_picker("타이틀 색상", st.session_state["title_color"])
-        c_header_color = st.color_picker("헤더 색상", st.session_state["header_color"])
-        c_accent_color = st.color_picker("강조 색상", st.session_state["accent_color"])
-        c_bg = st.color_picker("배경 색상", st.session_state["bg_color"])
-        c_chart = st.selectbox("차트 형태:", ["막대 차트", "영역 차트"])
-        c_align = st.radio("정렬:", ["left", "center"])
-        c_icon = st.selectbox("아이콘:", ["🛡️", "🎖️", "⚔️", "🦅"])
-        c_title = st.text_input("타이틀 문구:", value=st.session_state["custom_title"])
+st.markdown('<div class="main-header">AI·데이터 기반 군 인력정보 통합·분석 및 최적 인력운용 플랫폼</div>', unsafe_allow_html=True)
+
+if uploaded_file is not None:
+    try:
+        # 멀티 시트 읽기 (인원DB, 당직근무표)
+        df_main = pd.read_excel(uploaded_file, sheet_name='인원DB')
+        df_duty = pd.read_excel(uploaded_file, sheet_name='당직근무표')
         
-        if st.button("🎨 설정 저장", type="primary", use_container_width=True):
-            st.session_state["title_color"] = c_title_color
-            st.session_state["header_color"] = c_header_color
-            st.session_state["accent_color"] = c_accent_color
-            st.session_state["bg_color"] = c_bg
-            st.session_state["chart_type"] = c_chart
-            st.session_state["title_align"] = c_align
-            st.session_state["unit_icon"] = c_icon
-            st.session_state["custom_title"] = c_title
-            st.rerun()
-        st.divider()
-
-    if st.button("🚪 로그아웃", type="secondary", use_container_width=True):
-        st.session_state["logged_in"] = False
-        st.session_state["username"] = ""
-        st.rerun()
-
-header_txt = str(st.session_state["unit_icon"]) + " [" + str(current_user["unit"]) + "] " + str(st.session_state["custom_title"])
-st.markdown('<div class="main-title">' + header_txt + '</div>', unsafe_allow_html=True)
-
-@st.cache_data
-def generate_personnel_db():
-    random.seed(42)
-    today = date(2026, 8, 30)
-
-    u_6bde = [
-        "6여단 본부", "6여단 101대대 본부", "6여단 101대대 1중대", 
-        "6여단 101대대 2중대", "6여단 102대대", "6여단 103대대", 
-        "6여단 포병대대", "6여단 수송대대", "6여단 정비대대"
-    ]
-    u_oth = ["군수사령부 직할대", "작전사령부 본부", "1군단 사령부", "5사단 본부"]
-
-    ln = ["김", "이", "박", "최", "정", "강", "조", "윤"]
-    fn = ["민준", "서준", "도현", "우진", "지후", "하준"]
-    rk = ["하사", "중사", "상사", "원사", "소위", "중위", "대위"]
-    br = ["통신", "병기", "수송", "보급", "보병", "포병"]
-    cp = ["대형운전면허", "특수운전면허", "구난차운전면허", "정보처리기사", "없음"]
-    ep = ["수송안전교육(이수)", "구난차량운용교육(이수)", "안전관리교육(이수)"]
-    ap = ["즉시 가용", "2026-08-31", "임무 수행 중"]
-    rt = ["S", "A+", "A", "B+", "B"]
-    cs = ["자살예방교육", "성폭력 예방교육", "보안 및 정보보호교육", "군대윤리교육"]
-
-    data = []
-    for i in range(1, 301):
-        name = random.choice(ln) + random.choice(fn)
-        sn = str(random.randint(15, 25)) + "-" + str(10000 + i)
-        rank = random.choice(rk)
-        branch = random.choice(br)
-        unit = random.choice(u_6bde) if i <= 240 else random.choice(u_oth)
-
-        if i % 10 == 0:
-            branch = "수송"
-            cert = "특수운전면허, 구난차운전면허"
-            edu = "구난차량운용교육(이수), 수송안전교육(이수)"
-        else:
-            cert = random.choice(cp)
-            edu = random.choice(ep)
-
-        exp = str(random.randint(1, 15)) + "년"
-        avail = random.choice(ap)
-        rating = random.choice(rt)
-        course = random.choice(cs)
-        status = random.choices(["이수완료", "미이수"], weights=[0.7, 0.3])[0]
-
-        days = random.choice([-3, -1, 2, 4, 6, 10, 18, 25])
-        due = today + timedelta(days=days)
-
-        data.append({
-            "소속부대": unit,
-            "군번": sn,
-            "성명": name,
-            "계급": rank,
-            "병과": branch,
-            "보유자격증": cert,
-            "교육이수현황": edu,
-            "관련경력": exp,
-            "투입가용일": avail,
-            "최종평정": rating,
-            "필수의무교육": course,
-            "이수상태": status,
-            "교육마감일": due.strftime("%Y-%m-%d"),
-            "D_Day": (due - today).days
-        })
-
-    return pd.DataFrame(data)
-
-raw_df = generate_personnel_db()
-
-if current_user["accessible_units"] == ["ALL"]:
-    df = raw_df.copy()
-else:
-    df = raw_df[raw_df["소속부대"].isin(current_user["accessible_units"])].copy()
-
-tab1, tab2 = st.tabs(["🤖 1. AI 인사 분석", "🚨 2. 의무교육 관제"])
-
-with tab1:
-    st.subheader("🤖 Gemini 참모 AI 적합자 분석")
-    st.write("📊 관할 부대 인원: **총", len(df), "명**")
-
-    user_prompt = st.text_input(
-        "💡 임무 요구사항:",
-        value="내일 바로 구난차 끌고 출동할 수 있는 숙련된 간부 찾아줘"
-    )
-    top_n = st.slider("🎯 추출 인원 수:", min_value=1, max_value=5, value=3)
-
-    if st.button("🚀 AI 분석 실행", type="primary"):
-        if not user_prompt.strip():
-            st.warning("요구사항을 입력하세요.")
-        else:
-            with st.spinner("🤖 심사 진행 중..."):
-                if gemini_api_key:
-                    try:
-                        kw = [w for w in ["구난", "운전", "드론", "통신", "위험물", "보급"] if w in user_prompt.lower()]
-                        if kw:
-                            pat = "|".join(kw)
-                            fc = df[df["보유자격증"].str.contains(pat, na=False) | df["교육이수현황"].str.contains(pat, na=False) | df["병과"].str.contains(pat, na=False)]
-                            if len(fc) < 5:
-                                fc = df.head(20)
-                        else:
-                            fc = df.head(20)
-
-                        cols = ["소속부대", "성명", "계급", "병과", "보유자격증", "교육이수현황", "관련경력", "투입가용일", "최종평정"]
-                        db_j = fc.head(15)[cols].to_json(orient="records", force_ascii=False)
-
-                        p_txt = "육군 인사참모 AI다. DB에서 상위 " + str(top_n) + "명을 추천해라.\n요구:" + user_prompt + "\nDB:" + db_j + '\nJSON만 응답:[{"성명":"이름","계급":"계급","소속부대":"부대","적합도점수":95,"추천사유":"사유"}]'
-
-                        m = genai.GenerativeModel("gemini-3.6-flash")
-                        res = m.generate_content(p_txt)
-                        c_txt = re.sub(r"```(?:json)?", "", res.text).strip()
-                        items = json.loads(c_txt)
-
-                        st.success("🎯 최적격자 " + str(len(items)) + "명 심사 완료")
-                        for r, it in enumerate(items, 1):
-                            t = "🏅 " + str(r) + "순위: [" + str(it['소속부대']) + "] " + str(it['성명']) + " " + str(it['계급']) + " (" + str(it['적합도점수']) + "점)"
-                            with st.expander(t, expanded=True):
-                                st.write("🤖 **판단 사유:**")
-                                st.markdown('<p class="accent-text">' + str(it["추천사유"]) + '</p>', unsafe_allow_html=True)
-                    except Exception as e:
-                        st.error("연동 오류: " + str(e))
-                else:
-                    st.error("API 키 설정이 필요합니다.")
-
-    st.divider()
-    st.subheader("📋 관할 부대 간부 인사자력 현황")
-    d_cols = ["소속부대", "군번", "성명", "계급", "병과", "보유자격증", "교육이수현황", "관련경력", "투입가용일", "최종평정"]
-    st.dataframe(df[d_cols], use_container_width=True, hide_index=True)
-
-with tab2:
-    st.subheader("📢 필수 의무교육 관제")
-    st.write("접속 권한: **[" + str(current_user["unit"]) + "]**")
-
-    u_opts = ["전체"] + list(df["소속부대"].unique())
-    sel_u = st.selectbox("📌 조회 부대 선택:", u_opts)
-
-    if sel_u == "전체":
-        edf = df.copy()
-    else:
-        edf = df[df["소속부대"] == sel_u].copy()
-
-    un_df = edf[edf["이수상태"] == "미이수"]
-    urg_df = un_df[un_df["D_Day"] <= 7]
-    comp = len(edf[edf["이수상태"] == "이수완료"])
-    rate = round((comp / len(edf)) * 100, 1) if len(edf) > 0 else 0
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("👥 대상 인원", str(len(edf)) + "명")
-    c2.metric("✅ 평균 이수율", str(rate) + "%")
-    c3.metric("❌ 미이수 인원", str(len(un_df)) + "명")
-    c4.metric("🚨 마감 임박", str(len(urg_df)) + "명")
-
-    st.divider()
-
-    col_chart1, col_chart2 = st.columns(2)
-    
-    with col_chart1:
-        st.markdown("#### 📊 부대별 병과 분포")
-        b_data = edf["병과"].value_counts()
-        if st.session_state["chart_type"] == "영역 차트":
-            st.area_chart(b_data)
-        else:
-            st.bar_chart(b_data)
-
-    with col_chart2:
-        st.markdown("#### 📈 과목별 미이수자 분포")
-        e_data = un_df["필수의무교육"].value_counts()
-        if len(e_data) == 0:
-            st.info("미이수자가 없습니다.")
-        else:
-            if st.session_state["chart_type"] == "영역 차트":
-                st.area_chart(e_data)
-            else:
-                st.bar_chart(e_data)
-
-    st.divider()
-    st.subheader("🚨 독려 대상자 목록")
-
-    if len(urg_df) == 0:
-        st.success("🎉 마감 임박 미이수자가 없습니다.")
-    else:
-        for idx, row in urg_df.sort_values(by="D_Day").head(15).iterrows():
-            if row["D_Day"] >= 0:
-                d_str = "D-" + str(row["D_Day"]) + "일"
-            else:
-                d_str = "마감 " + str(abs(row["D_Day"])) + "일 경과"
+        # 날짜 형식 통일
+        df_duty['일자'] = pd.to_datetime(df_duty['일자']).dt.date
+        
+        # 3. [동적 피로도 계산 알고리즘]
+        # 선택된 날짜 기준 직전 7일 범위 설정
+        start_date = target_date - datetime.timedelta(days=7)
+        recent_duty = df_duty[(df_duty['일자'] >= start_date) & (df_duty['일자'] <= target_date)]
+        
+        # 야간 당직 횟수 실시간 집계
+        night_duty_counts = recent_duty[recent_duty['구분'] == '야간'].groupby('개인ID').size().to_dict()
+        
+        # 데이터프레임에 실시간 반영 (고정값 제거 후 동적 산출)
+        df_main['최근7일_야간당직수'] = df_main['개인ID'].map(night_duty_counts).fillna(0)
+        df_main['실시간_피로도점수'] = 15 + (df_main['최근7일_야간당직수'] * 25)
+        
+        # 피로도 등급 분류 함수
+        def get_fatigue_grade(score):
+            if score <= 30: return '낮음'
+            elif score <= 70: return '보통'
+            else: return '높음'
             
-            err_msg = "⚠️ [" + str(row["소속부대"]) + "] " + str(row["성명"]) + " " + str(row["계급"]) + " | 과목: " + str(row["필수의무교육"]) + " | 마감: " + str(row["교육마감일"]) + " (" + d_str + ")"
-            st.error(err_msg)
+        df_main['피로도등급'] = df_main['실시간_피로도점수'].apply(get_fatigue_grade)
+        
+        # 4. 상단 KPI 요약
+        kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
+        total = len(df_main)
+        avail = len(df_main[df_main['현재 상태'] == '가용'])
+        high_fatigue = len(df_main[df_main['피로도등급'] == '높음'])
+        
+        kpi1.metric("부대 총원", f"{total}명")
+        kpi2.metric("가용 인원", f"{avail}명", f"{(avail/total)*100:.1f}%")
+        kpi3.metric("휴가 인원", f"{len(df_main[df_main['현재 상태'] == '휴가'])}명")
+        kpi4.metric("교육파견", f"{len(df_main[df_main['현재 상태'] == '교육파견'])}명")
+        kpi5.metric("고피로 인원 (위험)", f"{high_fatigue}명", delta_color="inverse")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # 5. 화면 분할: 좌측 종합 현황 / 우측 AI 임무추천
+        col1, col2 = st.columns([1.1, 1])
+        
+        with col1:
+            st.subheader("📊 부대 소속별 인원 및 상태 현황")
+            unit_status = df_main.groupby(['소속', '현재 상태']).size().unstack(fill_value=0)
+            st.dataframe(unit_status, use_container_width=True)
+            
+        with col2:
+            st.subheader("🎯 AI 임무 적합 인원 추천 (실시간 피로도 연동)")
+            selected_mission = st.selectbox("임무 선택", ["드론 정찰 및 감시", "전술 통신 지원", "재난 대응"])
+            
+            if selected_mission == "드론 정찰 및 감시":
+                # 조건 필터링: 가용 상태 + 드론 관련 자격 보유자
+                candidates = df_main[(df_main['현재 상태'] == '가용') & (df_main['자격정보'].str.contains('드론조종|정보분석기사', na=False))].copy()
+                
+                if not candidates.empty:
+                    # AI 점수 산출: 기본점수 70 + 복무연차 가중치 - 피로도 패널티(고피로자 감점)
+                    candidates['적합도점수'] = 70 + (candidates['복무연차'] * 2)
+                    candidates.loc[candidates['피로도등급'] == '낮음', '적합도점수'] += 10
+                    candidates.loc[candidates['피로도등급'] == '높음', '적합도점수'] -= 20 # 번아웃 방지 안전장치
+                    
+                    top_5 = candidates.sort_values(by='적합도점수', ascending=False).head(5)
+                    
+                    display_df = top_5[['성명', '계급', '소속', '직책', '자격정보', '최근7일_야간당직수', '피로도등급', '적합도점수']]
+                    display_df.index = range(1, len(display_df) + 1)
+                    
+                    st.success(f"📌 기준일자({target_date}) 당직 이력을 역산하여 산출된 최적의 인원입니다.")
+                    st.dataframe(display_df, use_container_width=True)
+                else:
+                    st.warning("조건에 부합하는 가용 인원이 없습니다.")
 
-    st.divider()
-    st.subheader("📋 상세 현황 필터링")
+    except Exception as e:
+        st.error(f"데이터를 읽거나 연동하는 중 오류가 발생했습니다: {e}")
 
-    f1, f2 = st.columns(2)
-    with f1:
-        c_sel = st.selectbox("과목 선택:", ["전체", "자살예방교육", "성폭력 예방교육", "보안 및 정보보호교육", "군대윤리교육"])
-    with f2:
-        s_sel = st.selectbox("이수 상태 선택:", ["전체", "미이수", "이수완료"])
-
-    fdf = edf.copy()
-    if c_sel != "전체":
-        fdf = fdf[fdf["필수의무교육"] == c_sel]
-    if s_sel != "전체":
-        fdf = fdf[fdf["이수상태"] == s_sel]
-
-    ec = ["소속부대", "군번", "성명", "계급", "병과", "필수의무교육", "이수상태", "교육마감일", "D_Day"]
-    st.dataframe(fdf[ec].sort_values(by=["이수상태", "D_Day"]), use_container_width=True, hide_index=True)
+else:
+    st.info("👈 좌측 사이드바에서 엑셀 파일(`.xlsx`)을 업로드하면 시스템이 가동됩니다.")
