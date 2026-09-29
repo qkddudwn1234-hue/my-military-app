@@ -15,13 +15,12 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2. 시스템 내부에서 여단급 DB 및 당직표 자동 생성 (파일 업로드 오류 원천 차단)
+# 2. 시스템 내부에서 여단급 DB 및 당직표 자동 생성 (파일 의존성 원천 차단)
 @st.cache_data
 def load_military_data():
     np.random.seed(42)
     random.seed(42)
     
-    # 인원 생성
     rank_distribution = {'대령':1, '중령':6, '소령':15, '대위':40, '중위':50, '소위':30, '원사':15, '상사':50, '중사':120, '하사':173}
     units = ['여단본부', '1대대', '2대대', '3대대', '포병대대', '군지대대']
     last_names = list("김이박최정강조윤장임한오서신권황안송전홍류고문양손배백허남심노")
@@ -50,7 +49,6 @@ def load_military_data():
             
     df_main = pd.DataFrame(data_rows)
     
-    # 당직표 생성 (최근 14일)
     duty_rows = []
     dates = pd.date_range(start="2026-09-15", end="2026-09-29")
     for date_obj in dates:
@@ -83,7 +81,6 @@ df_duty['일자_dt'] = pd.to_datetime(df_duty['일자']).dt.date
 start_date = target_date - datetime.timedelta(days=7)
 recent_duty = df_duty[(df_duty['일자_dt'] >= start_date) & (df_duty['일자_dt'] <= target_date)]
 
-# 야간 당직 횟수 집계
 night_counts = recent_duty[recent_duty['구분'] == '야간'].groupby('개인ID').size().to_dict()
 df_main['최근7일_야간당직수'] = df_main['개인ID'].map(night_counts).fillna(0)
 df_main['실시간_피로도점수'] = 15 + (df_main['최근7일_야간당직수'] * 25)
@@ -109,7 +106,6 @@ kpi5.metric("고피로 인원 (위험)", f"{high_fatigue}명", delta_color="inve
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 6. AI 추천 및 현황
 col1, col2 = st.columns([1.1, 1])
 
 with col1:
@@ -124,7 +120,7 @@ with col2:
     candidates = df_main[df_main['현재 상태'] == '가용'].copy()
     candidates['적합도점수'] = 70 + (candidates['복무연차'] * 1.5)
     candidates.loc[candidates['피로도등급'] == '낮음', '적합도점수'] += 15
-    candidates.loc[candidates['피로도등급'] == '높음', '적합도점수'] -= 30 # 번아웃 방지 패널티
+    candidates.loc[candidates['피로도등급'] == '높음', '적합도점수'] -= 30
     
     top_5 = candidates.sort_values(by='적합도점수', ascending=False).head(5)
     display_df = top_5[['성명', '계급', '소속', '직책', '자격정보', '최근7일_야간당직수', '피로도등급', '적합도점수']]
